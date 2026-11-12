@@ -201,12 +201,12 @@ class ConsensusMasterAgent:
                 "confidence": 30,
                 "grade": "F",
                 "setup": "Spike Anómalo de Broker",
-                "recommended_time": "5 MINUTOS (M5)",
-                "duration_seconds": 300,
-                "explanation": "🛡️ ESCUDO ANTI-BROKER: Mecha anómala extrema detectada (>68% rango). Posible spike de manipulación OTC. Señal bloqueada para proteger capital.",
+                "recommended_time": "1 MINUTO (M1)",
+                "duration_seconds": 60,
+                "explanation": "🛡️ ESCUDO ANTI-BROKER: Mecha anómala detectada (>68% rango). Posible spike de manipulación OTC. Señal 1M bloqueada para proteger capital.",
                 "next_candle": {
                     "direction": "INDECISIÓN",
-                    "label": "🔮 PRÓXIMA VELA: ⚠️ MANIPULACIÓN OTC DETECTADA",
+                    "label": "🔮 PRÓXIMA VELA (1M): ⚠️ MANIPULACIÓN OTC DETECTADA",
                     "probability": 30,
                     "reason": "Spike anómalo de broker"
                 },
@@ -229,12 +229,12 @@ class ConsensusMasterAgent:
                 "confidence": 35,
                 "grade": "F",
                 "setup": "Mercado Plano / Doji",
-                "recommended_time": "5 MINUTOS (M5)",
-                "duration_seconds": 300,
-                "explanation": "🛡️ PROTECCIÓN DE CAPITAL: Mercado plano o doji sin volumen. Broker sin liquidez direccional. Esperando vela de 5m con volumen institucional.",
+                "recommended_time": "1 MINUTO (M1)",
+                "duration_seconds": 60,
+                "explanation": "🛡️ PROTECCIÓN DE CAPITAL: Mercado plano o doji sin volumen institucional. Esperando vela de 1M con confirmación de tendencia macro 5M.",
                 "next_candle": {
                     "direction": "INDECISIÓN",
-                    "label": "🔮 PRÓXIMA VELA: ⚖️ INDECISIÓN",
+                    "label": "🔮 PRÓXIMA VELA (1M): ⚖️ INDECISIÓN",
                     "probability": 50,
                     "reason": "Doji / Sin volumen"
                 },
@@ -392,14 +392,14 @@ class ConsensusMasterAgent:
 
         if signal == "ESPERAR":
             explanation = (
-                "Consenso IA (Anti-Broker M5 · Esperar): "
-                + (reason if reason else "Mercado sin patrón Sniper A+ de 5 minutos. ")
-                + "Protegiendo capital de manipulaciones OTC; esperando setup institucional claro."
+                "Consenso IA (MTF Macro 5M · Esperar): "
+                + (reason if reason else "Sin gatillo Sniper A+ de 1 minuto alineado con estructura 5M. ")
+                + "Protegiendo capital de manipulaciones del broker."
             )
             prob_call = 50.0
             prob_put = 50.0
         else:
-            explanation = f"🛡️ [ANTI-BROKER M5 | {grade}] ({confidence}%): {setup_name}. {reason}"
+            explanation = f"🎯 [MTF: Macro 5M + Señal 1M | {grade}] ({confidence}%): Entrada {signal} (1 MIN). Setup: {setup_name}. {reason}"
             prob_call = float(confidence) if signal == "CALL" else round(100.0 - confidence, 1)
             prob_put = float(confidence) if signal == "PUT" else round(100.0 - confidence, 1)
 
@@ -410,12 +410,12 @@ class ConsensusMasterAgent:
             "confidence": confidence,
             "grade": grade,
             "setup": setup_name,
-            "recommended_time": "5 MINUTOS (M5)" if signal != "ESPERAR" else "—",
-            "duration_seconds": 300 if signal != "ESPERAR" else 0,
+            "recommended_time": "1 MINUTO (M1)" if signal != "ESPERAR" else "—",
+            "duration_seconds": 60 if signal != "ESPERAR" else 0,
             "explanation": explanation,
             "next_candle": {
                 "direction": next_candle_dir,
-                "label": next_candle_label,
+                "label": next_candle_label.replace("(5M)", "(1M)"),
                 "probability": next_candle_prob,
                 "reason": setup_name if setup_name else "Fuerzas equilibradas"
             },
