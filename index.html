@@ -998,81 +998,50 @@
       if (distToRes >= 0 && distToRes < 0.030 && !bullTrendStrong) zCall -= 3.5;
       if (distToSup >= 0 && distToSup < 0.030 && !bearTrendStrong) zPut -= 3.5;
 
-      const probCall = Math.round((100.0 / (1.0 + Math.exp(-zCall))) * 10) / 10;
-      const probPut = Math.round((100.0 / (1.0 + Math.exp(-zPut))) * 10) / 10;
+      // Relación probabilística binaria directa (Softmax / Log-Odds)
+      const deltaZ = zCall - zPut;
+      const probCall = Math.round((100.0 / (1.0 + Math.exp(-deltaZ))) * 10) / 10;
+      const probPut = Math.round((100.0 - probCall) * 10) / 10;
 
       // =============================================================
-      // REGLA DE ORO DE CONFLUENCIA
+      // ANÁLISIS DIRECCIONAL EXACTO: ¿SUBE O BAJA?
       // =============================================================
-      let signal = "ESPERAR";
+      let signal = "CALL";
       let confidence = 50;
-      let grade = "—";
+      let nextCandleDir = "SUBE";
+      let nextCandleLabel = "";
       let setupName = "";
       let reason = "";
-      let nextCandleDir = "INDECISIÓN";
-      let nextCandleLabel = "🔮 PRÓXIMA VELA (1M): ⚖️ INDECISIÓN";
-      let nextCandleProb = 50;
 
-      // Caso A: Trampa de Liquidez Detectada (SMC Sweep)
-      if (smc.sweepVote === "PUT" && p3_is_safe && p2_vote !== "CALL") {
-        signal = "PUT";
-        confidence = Math.max(88, Math.min(97, Math.round(probPut)));
-        grade = "A+";
-        setupName = "Trampa de Toros (SMC Bear Sweep)";
-        reason = `${smc.sweep} + Absorción de Smart Money`;
-        nextCandleDir = "BAJA";
-        nextCandleLabel = `🔮 PRÓXIMA VELA (1M): 🔴 BAJA (${confidence}%)`;
-        nextCandleProb = confidence;
-      } else if (smc.sweepVote === "CALL" && p3_is_safe && p2_vote !== "PUT") {
+      if (probCall >= 50.0) {
         signal = "CALL";
-        confidence = Math.max(88, Math.min(97, Math.round(probCall)));
-        grade = "A+";
-        setupName = "Trampa de Osos (SMC Bull Sweep)";
-        reason = `${smc.sweep} + Absorción de Smart Money`;
+        confidence = Math.max(54, Math.min(98, Math.round(probCall)));
         nextCandleDir = "SUBE";
         nextCandleLabel = `🔮 PRÓXIMA VELA (1M): 🟢 SUBE (${confidence}%)`;
-        nextCandleProb = confidence;
-      }
-      // Caso B: Confluencia Cuántica Probabilística (P >= 68% + P3 Seguro)
-      else if (p3_is_safe) {
-        if (probCall >= 68.0 && (p1_vote === "CALL" || p2_vote === "CALL") && p2_vote !== "PUT") {
-          signal = "CALL";
-          confidence = Math.max(78, Math.min(97, Math.round(probCall)));
-          grade = confidence >= 86 ? "A+" : "A";
-          const callDetail = p1_vote === "CALL" ? p1_detail : "Impulso Alcista";
-          setupName = `${callDetail} | ${smc.bos || 'Tendencia M5'}`;
-          reason = `Confluencia: ${callDetail} + Tendencia ${p2_status} + M5 Alcista`;
-          nextCandleDir = "SUBE";
-          nextCandleLabel = `🔮 PRÓXIMA VELA (1M): 🟢 SUBE (${confidence}%)`;
-          nextCandleProb = confidence;
-        } else if (probPut >= 68.0 && (p1_vote === "PUT" || p2_vote === "PUT") && p2_vote !== "CALL") {
-          signal = "PUT";
-          confidence = Math.max(78, Math.min(97, Math.round(probPut)));
-          grade = confidence >= 86 ? "A+" : "A";
-          const putDetail = p1_vote === "PUT" ? p1_detail : "Impulso Bajista";
-          setupName = `${putDetail} | ${smc.bos || 'Tendencia M5'}`;
-          reason = `Confluencia: ${putDetail} + Tendencia ${p2_status} + M5 Bajista`;
-          nextCandleDir = "BAJA";
-          nextCandleLabel = `🔮 PRÓXIMA VELA (1M): 🔴 BAJA (${confidence}%)`;
-          nextCandleProb = confidence;
-        }
+        const callDetail = p1_vote === "CALL" ? p1_detail : (smc.bos || "Impulso Alcista");
+        setupName = `${callDetail} | ${p2_status}`;
+        reason = `Proyección Alcista: ${callDetail} + Tendencia ${p2_status} + M5 (${m5Bullish ? 'Alcista' : 'Consolidación'}) + RSI ${rsi}`;
+      } else {
+        signal = "PUT";
+        confidence = Math.max(54, Math.min(98, Math.round(probPut)));
+        nextCandleDir = "BAJA";
+        nextCandleLabel = `🔮 PRÓXIMA VELA (1M): 🔴 BAJA (${confidence}%)`;
+        const putDetail = p1_vote === "PUT" ? p1_detail : (smc.bos || "Impulso Bajista");
+        setupName = `${putDetail} | ${p2_status}`;
+        reason = `Proyección Bajista: ${putDetail} + Tendencia ${p2_status} + M5 (${m5Bearish ? 'Bajista' : 'Consolidación'}) + RSI ${rsi}`;
       }
 
+      let grade = "B+";
+      if (confidence >= 82) grade = "A+";
+      else if (confidence >= 68) grade = "A";
+      else if (confidence >= 58) grade = "B+";
+      else grade = "B";
+
       let explanation = "";
-      if (signal === "ESPERAR") {
-        let blocker = "";
-        if (!p3_is_safe) {
-          blocker = `Anti-Manipulación (${p3_status}: ${p3_detail})`;
-        } else if (p1_status === "Agotamiento") {
-          blocker = `Velas Anteriores (${p1_detail})`;
-        } else if (p1_vote !== "ESPERAR" && p2_vote !== "ESPERAR" && p1_vote !== p2_vote) {
-          blocker = `Conflicto de Tendencia (Velas: ${p1_vote} vs Tendencia: ${p2_status})`;
-        } else {
-          blocker = `Probabilidad insuficiente (CALL: ${probCall}% | PUT: ${probPut}%) - Esperando Setup A+`;
-        }
-        explanation = `Consenso IA Cuántico (Esperar): ${blocker}. Protegiendo saldo.`;
+      if (confidence >= 68) {
+        explanation = `🎯 [SEÑAL ${grade} | ALTA CONFLUENCIA] (${confidence}%): ${signal === 'CALL' ? '🟢 SUBIR (CALL)' : '🔴 BAJAR (PUT)'} (1 MIN). ${reason}.`;
       } else {
-        explanation = `🎯 [IA CUÁNTICA A+ | ${grade}] (${confidence}%): Entrada ${signal} (1 MIN). ${reason}.`;
+        explanation = `⚡ [PROYECCIÓN ${grade}] (${confidence}%): Inclinación hacia ${signal === 'CALL' ? '🟢 SUBIR' : '🔴 BAJAR'}. ${reason}.`;
       }
 
       const trendStr = `${p2_status} (M5: ${m5Bullish ? '🟢' : m5Bearish ? '🔴' : '⚪'})`;
@@ -1084,12 +1053,12 @@
         confidence: confidence,
         probCall: probCall,
         probPut: probPut,
-        recommendedTime: signal !== "ESPERAR" ? "1 VELA (M1)" : "—",
-        durationSeconds: signal !== "ESPERAR" ? 60 : 0,
+        recommendedTime: "1 VELA (M1)",
+        durationSeconds: 60,
         rsi: rsi,
         trend: trendStr,
         count: candles.length,
-        nextCandle: { dir: nextCandleDir, label: nextCandleLabel, prob: nextCandleProb, reason: setupName || "Fuerzas equilibradas" },
+        nextCandle: { dir: nextCandleDir, label: nextCandleLabel, prob: confidence, reason: setupName || "Fuerzas equilibradas" },
         explanation: explanation,
         agents: {
           candles: { vote: p1_vote, status: vsa.status, detail: `${p1_detail} | Spread ${vsa.relSpread}x` },

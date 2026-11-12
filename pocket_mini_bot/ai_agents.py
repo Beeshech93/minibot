@@ -639,80 +639,37 @@ class ConsensusMasterAgent:
         if 0 <= dist_to_sup < 0.030 and not bear_trend_strong:
             z_put -= 3.5
 
-        # Cálculo de probabilidades sigmoides calibradas
-        prob_call = round(float(100.0 / (1.0 + np.exp(-z_call))), 1)
-        prob_put = round(float(100.0 / (1.0 + np.exp(-z_put))), 1)
+        # Relación probabilística binaria directa (Softmax / Log-Odds)
+        delta_z = z_call - z_put
+        prob_call = round(float(100.0 / (1.0 + np.exp(-delta_z))), 1)
+        prob_put = round(100.0 - prob_call, 1)
 
         # =============================================================
-        # REGLA DE ORO DE CONFLUENCIA
+        # ANÁLISIS DIRECCIONAL EXACTO: ¿SUBE O BAJA?
         # =============================================================
-        signal = "ESPERAR"
-        confidence = 50
-        grade = "—"
-        setup_name = ""
-        reason = ""
-        next_candle_dir = "INDECISIÓN"
-        next_candle_label = "🔮 PRÓXIMA VELA (1M): ⚖️ INDECISIÓN"
-        next_candle_prob = 50
-
-        # Caso A: Trampa de Liquidez Detectada (SMC Sweep)
-        if smc["sweep_vote"] == "PUT" and p3_is_safe and p2_vote != "CALL":
-            signal = "PUT"
-            confidence = max(88, min(97, int(prob_put)))
-            grade = "A+"
-            setup_name = "Trampa de Toros (SMC Bear Sweep)"
-            reason = f"{smc['sweep']} + Absorción de Smart Money"
-            next_candle_dir = "BAJA"
-            next_candle_label = f"🔮 PRÓXIMA VELA (1M): 🔴 BAJA ({confidence}%)"
-            next_candle_prob = confidence
-
-        elif smc["sweep_vote"] == "CALL" and p3_is_safe and p2_vote != "PUT":
+        if prob_call >= 50.0:
             signal = "CALL"
-            confidence = max(88, min(97, int(prob_call)))
-            grade = "A+"
-            setup_name = "Trampa de Osos (SMC Bull Sweep)"
-            reason = f"{smc['sweep']} + Absorción de Smart Money"
+            confidence = max(54, min(98, int(prob_call)))
             next_candle_dir = "SUBE"
             next_candle_label = f"🔮 PRÓXIMA VELA (1M): 🟢 SUBE ({confidence}%)"
-            next_candle_prob = confidence
-
-        # Caso B: Confluencia Cuántica Probabilística (P >= 68% + P3 Seguro)
-        elif p3_is_safe:
-            if prob_call >= 68.0 and (p1_vote == "CALL" or p2_vote == "CALL") and p2_vote != "PUT":
-                signal = "CALL"
-                confidence = max(78, min(97, int(prob_call)))
-                grade = "A+" if confidence >= 86 else "A"
-                call_detail = p1_detail if p1_vote == "CALL" else "Impulso Alcista"
-                setup_name = f"{call_detail} | {smc['bos'] or 'Tendencia M5'}"
-                reason = f"Confluencia: {call_detail} + Tendencia {p2_status} + M5 Alcista"
-                next_candle_dir = "SUBE"
-                next_candle_label = f"🔮 PRÓXIMA VELA (1M): 🟢 SUBE ({confidence}%)"
-                next_candle_prob = confidence
-
-            elif prob_put >= 68.0 and (p1_vote == "PUT" or p2_vote == "PUT") and p2_vote != "CALL":
-                signal = "PUT"
-                confidence = max(78, min(97, int(prob_put)))
-                grade = "A+" if confidence >= 86 else "A"
-                put_detail = p1_detail if p1_vote == "PUT" else "Impulso Bajista"
-                setup_name = f"{put_detail} | {smc['bos'] or 'Tendencia M5'}"
-                reason = f"Confluencia: {put_detail} + Tendencia {p2_status} + M5 Bajista"
-                next_candle_dir = "BAJA"
-                next_candle_label = f"🔮 PRÓXIMA VELA (1M): 🔴 BAJA ({confidence}%)"
-                next_candle_prob = confidence
-
-        if signal == "ESPERAR":
-            if not p3_is_safe:
-                blocker = f"Anti-Manipulación ({p3_status}: {p3_detail})"
-            elif p1_status == "Agotamiento":
-                blocker = f"Velas Anteriores ({p1_detail})"
-            elif p1_vote != "ESPERAR" and p2_vote != "ESPERAR" and p1_vote != p2_vote:
-                blocker = f"Conflicto de Tendencia (Velas: {p1_vote} vs Tendencia: {p2_status})"
-            else:
-                blocker = f"Probabilidad insuficiente (CALL: {prob_call}% | PUT: {prob_put}%) - Esperando Setup A+"
-
-            explanation = f"Consenso IA Cuántico (Esperar): {blocker}. Protegiendo saldo."
+            call_detail = p1_detail if p1_vote == "CALL" else (smc["bos"] or "Impulso Alcista")
+            setup_name = f"{call_detail} | {p2_status}"
+            reason = f"Proyección Alcista: {call_detail} + Tendencia {p2_status} + M5 ({'Alcista' if m5_bullish else 'Consolidación'}) + RSI {rsi:.1f}"
         else:
-            explanation = f"🎯 [IA CUÁNTICA A+ | {grade}] ({confidence}%): Entrada {signal} (1 MIN). {reason}."
+            signal = "PUT"
+            confidence = max(54, min(98, int(prob_put)))
+            next_candle_dir = "BAJA"
+            next_candle_label = f"🔮 PRÓXIMA VELA (1M): 🔴 BAJA ({confidence}%)"
+            put_detail = p1_detail if p1_vote == "PUT" else (smc["bos"] or "Impulso Bajista")
+            setup_name = f"{put_detail} | {p2_status}"
+            reason = f"Proyección Bajista: {put_detail} + Tendencia {p2_status} + M5 ({'Bajista' if m5_bearish else 'Consolidación'}) + RSI {rsi:.1f}"
+
+        grade = "A+" if confidence >= 82 else ("A" if confidence >= 68 else ("B+" if confidence >= 58 else "B"))
+
+        if confidence >= 68:
+            explanation = f"🎯 [SEÑAL {grade} | ALTA CONFLUENCIA] ({confidence}%): {'🟢 SUBIR (CALL)' if signal == 'CALL' else '🔴 BAJAR (PUT)'} (1 MIN). {reason}."
+        else:
+            explanation = f"⚡ [PROYECCIÓN {grade}] ({confidence}%): Inclinación hacia {'🟢 SUBIR' if signal == 'CALL' else '🔴 BAJAR'}. {reason}."
 
         trend_str = f"{p2_status} (M5: {'🟢' if m5_bullish else '🔴' if m5_bearish else '⚪'})"
 
@@ -721,13 +678,13 @@ class ConsensusMasterAgent:
             "confidence": confidence,
             "grade": grade,
             "setup": setup_name,
-            "recommended_time": "1 MINUTO (M1)" if signal != "ESPERAR" else "—",
-            "duration_seconds": 60 if signal != "ESPERAR" else 0,
+            "recommended_time": "1 MINUTO (M1)",
+            "duration_seconds": 60,
             "explanation": explanation,
             "next_candle": {
                 "direction": next_candle_dir,
                 "label": next_candle_label.replace("(5M)", "(1M)"),
-                "probability": next_candle_prob,
+                "probability": confidence,
                 "reason": setup_name if setup_name else "Fuerzas equilibradas"
             },
             "prob_call": prob_call,
