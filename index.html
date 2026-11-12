@@ -409,13 +409,13 @@
       <option value="full">🖥️ Zona: Pantalla Completa</option>
     </select>
 
-    <!-- Mode Selector -->
+    <!-- Mode Selector (Anti-Broker 5m Default) -->
     <select id="timeMode">
-      <option value="auto">⏱️ Tiempo: Automático (IA)</option>
+      <option value="300" selected>🛡️ Sniper M5: 5 min (Anti-Broker)</option>
       <option value="60">⏱️ Fijar a 1 min (M1)</option>
       <option value="120">⏱️ Fijar a 2 min (M2)</option>
       <option value="180">⏱️ Fijar a 3 min (M3)</option>
-      <option value="300">⏱️ Fijar a 5 min (M5)</option>
+      <option value="auto">⏱️ Tiempo: Automático (IA)</option>
     </select>
 
     <!-- Analysis Interval (Ultra-Fast confirmation) -->
@@ -563,8 +563,14 @@
       const prev = candles[candles.length - 2];
       const prev2 = candles[candles.length - 3] || prev;
       const lastRange = Math.max(1.5, last.high - last.low);
+      const lowerRatio = last.lowerWick / lastRange;
+      const upperRatio = last.upperWick / lastRange;
+      const bodyRatio = last.bodySize / lastRange;
 
-      // 0. FILTRO ESTRICTO CONTRA MERCADO PLANO Y DOJIS
+      // 0. ESCUDO ANTI-MANIPULACIÓN DE BROKER (OTC SHIELD)
+      // Detecta micro-spikes artificiales y mechas extremas que los brokers usan para liquidar
+      const isSpikeManipulation = (upperRatio >= 0.68 || lowerRatio >= 0.68) && last.bodySize < 3.5;
+
       const recentBodies = candles.slice(-5).map(c => c.bodySize);
       const avgRecentBody = recentBodies.reduce((a, b) => a + b, 0) / recentBodies.length;
       const isFlatDoji = last.bodySize < 2.0 || lastRange < 3.0 || (last.bodySize < avgRecentBody * 0.20 && lastRange < avgRecentBody * 0.8);
@@ -594,9 +600,28 @@
       const upperBb = basis + 2.0 * std;
       const lowerBb = basis - 2.0 * std;
 
-      const lowerRatio = last.lowerWick / lastRange;
-      const upperRatio = last.upperWick / lastRange;
-      const bodyRatio = last.bodySize / lastRange;
+      if (isSpikeManipulation) {
+        return {
+          signal: "ESPERAR",
+          grade: "F",
+          confidence: 25,
+          probCall: 50,
+          probPut: 50,
+          recommendedTime: "5 MINUTOS (M5)",
+          durationSeconds: 300,
+          rsi: rsi,
+          trend: "Manipulado OTC",
+          count: candles.length,
+          nextCandle: { dir: "INDECISIÓN", label: "🔮 PRÓXIMA VELA (5M): ⚠️ MANIPULACIÓN DETECTADA", prob: 25, reason: "Spike anómalo de broker" },
+          explanation: "🛡️ ESCUDO ANTI-BROKER: Mecha extrema artificial detectada (>68% rango). Posible spike de manipulación OTC. Señal bloqueada para proteger capital.",
+          agents: {
+            pa: { vote: "ESPERAR", detail: "Spike Manipulado" },
+            st: { vote: "ESPERAR", detail: "Zona Peligrosa OTC" },
+            ind: { vote: "ESPERAR", detail: `RSI ${rsi}` },
+            mom: { vote: "ESPERAR", detail: "Trampa de Broker" }
+          }
+        };
+      }
 
       if (isFlatDoji) {
         return {
@@ -605,13 +630,13 @@
           confidence: 35,
           probCall: 50,
           probPut: 50,
-          recommendedTime: "—",
-          durationSeconds: 0,
+          recommendedTime: "5 MINUTOS (M5)",
+          durationSeconds: 300,
           rsi: rsi,
           trend: "Consolidación Plana",
           count: candles.length,
-          nextCandle: { dir: "INDECISIÓN", label: "🔮 PRÓXIMA VELA: ⚖️ INDECISIÓN", prob: 50, reason: "Doji plano sin volumen" },
-          explanation: "FILTRO ACTIVADO: Vela plana o Doji detectado. Sin volumen ni dirección clara. Protegiendo capital.",
+          nextCandle: { dir: "INDECISIÓN", label: "🔮 PRÓXIMA VELA (5M): ⚖️ INDECISIÓN", prob: 50, reason: "Doji plano sin volumen" },
+          explanation: "🛡️ PROTECCIÓN DE CAPITAL: Mercado plano o doji sin volumen. Broker sin liquidez direccional. Esperando vela de 5m.",
           agents: {
             pa: { vote: "ESPERAR", detail: "Doji Plano" },
             st: { vote: "ESPERAR", detail: "Rango Estrecho" },
@@ -717,21 +742,36 @@
         }
       }
 
+      // FILTRO DE TENDENCIA MACRO INSTITUCIONAL (ANTI-MANIPULACIÓN)
+      if (sniperSignal === "CALL" && ema9 < ema21 && ema21 < ema50) {
+        sniperConfidence = Math.max(50, sniperConfidence - 15);
+        if (sniperConfidence < 75) {
+          sniperSignal = "ESPERAR";
+          sniperReason = "Filtro Macro: Evitando compras en contra de la tendencia bajista de 5m";
+        }
+      } else if (sniperSignal === "PUT" && ema9 > ema21 && ema21 > ema50) {
+        sniperConfidence = Math.max(50, sniperConfidence - 15);
+        if (sniperConfidence < 75) {
+          sniperSignal = "ESPERAR";
+          sniperReason = "Filtro Macro: Evitando ventas en contra de la tendencia alcista de 5m";
+        }
+      }
+
       // PREDICTOR DE PRÓXIMA VELA
       let nextDir = sniperSignal === "CALL" ? "SUBE" : sniperSignal === "PUT" ? "BAJA" : "INDECISIÓN";
       let nextProb = sniperSignal !== "ESPERAR" ? sniperConfidence : 50;
       let nextLabel = nextDir === "SUBE" 
-        ? `🔮 PRÓXIMA VELA: 🟢 SUBE (${nextProb}%)` 
+        ? `🔮 PRÓXIMA VELA (5M): 🟢 SUBE (${nextProb}%)` 
         : nextDir === "BAJA" 
-        ? `🔮 PRÓXIMA VELA: 🔴 BAJA (${nextProb}%)` 
-        : "🔮 PRÓXIMA VELA: ⚖️ INDECISIÓN";
+        ? `🔮 PRÓXIMA VELA (5M): 🔴 BAJA (${nextProb}%)` 
+        : "🔮 PRÓXIMA VELA (5M): ⚖️ INDECISIÓN";
 
       const probCallPct = sniperSignal === "CALL" ? nextProb : (sniperSignal === "PUT" ? (100 - nextProb) : 50);
       const probPutPct = sniperSignal === "PUT" ? nextProb : (sniperSignal === "CALL" ? (100 - nextProb) : 50);
 
       const expText = sniperSignal !== "ESPERAR"
-        ? `🎯 [SNIPER ${sniperGrade}] Entrada ${sniperSignal} al cierre de vela. Setup: ${sniperSetup}. ${sniperReason}.`
-        : `Consenso IA (Esperar · ${sniperReason}): Filtro de alta precisión activo. Esperando gatillo A+ verificado.`;
+        ? `🛡️ [ANTI-BROKER M5 | ${sniperGrade}] Entrada ${sniperSignal} (5 MIN). Setup: ${sniperSetup}. ${sniperReason}.`
+        : `Consenso IA (Anti-Broker M5 · Esperar): ${sniperReason}. Protegiendo capital de manipulaciones OTC.`;
 
       return {
         signal: sniperSignal,
@@ -740,8 +780,8 @@
         confidence: sniperConfidence,
         probCall: probCallPct,
         probPut: probPutPct,
-        recommendedTime: sniperSignal !== "ESPERAR" ? "1 VELA (M1)" : "—",
-        durationSeconds: sniperSignal !== "ESPERAR" ? 60 : 0,
+        recommendedTime: sniperSignal !== "ESPERAR" ? "5 MINUTOS (M5)" : "—",
+        durationSeconds: sniperSignal !== "ESPERAR" ? 300 : 0,
         rsi: rsi,
         trend: ema9 > ema21 ? "Alcista" : ema9 < ema21 ? "Bajista" : "Lateral",
         count: candles.length,
@@ -1049,11 +1089,11 @@
       const sec = now.getSeconds();
       const min = now.getMinutes();
 
-      let tfSec = 60;
+      let tfSec = 300; // Por defecto: 5 minutos (Anti-Broker)
       if (timeMode.value === "60") tfSec = 60;
       else if (timeMode.value === "120") tfSec = 120;
       else if (timeMode.value === "180") tfSec = 180;
-      else if (timeMode.value === "300") tfSec = 300;
+      else if (timeMode.value === "300" || timeMode.value === "auto") tfSec = 300;
 
       const currentSecInTf = (min * 60 + sec) % tfSec;
       let secsLeft = tfSec - currentSecInTf;
@@ -1063,33 +1103,36 @@
       progressFill.style.width = pct + "%";
 
       const currentSig = signalText.innerText;
+      const minsLeft = Math.floor(secsLeft / 60);
+      const sLeft = secsLeft % 60;
+      const timeStr = `${minsLeft}:${sLeft < 10 ? '0' : ''}${sLeft}`;
 
-      // VENTANA DE ALERTA DE LOS ÚLTIMOS 5 SEGUNDOS (5, 4, 3, 2, 1)
-      if (secsLeft >= 1 && secsLeft <= 5) {
-        if (mediaStream && isRunning) performAnalysis();
+      // VENTANA DE ALERTA Y CONFIRMACIÓN FINAL (15s a 1s)
+      if (secsLeft >= 1 && secsLeft <= 15) {
+        if (mediaStream && isRunning && secsLeft <= 5) performAnalysis();
 
-        alertBadge.innerText = `🚨 ¡ALERTA EN ${secsLeft}s! ENTRAR EN: ${currentSig}`;
+        alertBadge.innerText = `🚨 ¡CONFIRMACIÓN M5 EN ${secsLeft}s! ENTRAR EN: ${currentSig} (5 MIN)`;
         alertBadge.className = "alert-badge alert-5s-active";
         countdownBadge.innerText = `⏱️ Cierra: ${secsLeft}s`;
-        expBadge.innerText = `⏱️ Tiempo: 1 VELA`;
+        expBadge.innerText = `⏱️ Tiempo: 5 MINUTOS`;
 
-        if (lastAlertSec !== sec) {
+        if (secsLeft <= 5 && lastAlertSec !== sec) {
           playBeep(720, 0.12);
           lastAlertSec = sec;
         }
       } else if (secsLeft === 0) {
-        alertBadge.innerText = `🎯 ¡ENTRA AHORA EN LA NUEVA VELA! (${currentSig})`;
+        alertBadge.innerText = `🎯 ¡ENTRA AHORA EN LA VELA DE 5 MIN! (${currentSig})`;
         alertBadge.className = "alert-badge alert-entry-now";
         countdownBadge.innerText = `🎯 ¡00s AHORA!`;
 
         if (lastAlertSec !== sec) {
-          playBeep(1200, 0.28);
+          playBeep(1200, 0.30);
           lastAlertSec = sec;
         }
       } else {
-        alertBadge.innerText = `⏳ Formando vela... Alerta activa a los :55s`;
+        alertBadge.innerText = `🛡️ Anti-Broker M5 activo · Cierre en ${timeStr}`;
         alertBadge.className = "alert-badge";
-        countdownBadge.innerText = `⏳ Cierra en: ${secsLeft}s`;
+        countdownBadge.innerText = `⏳ Cierra: ${timeStr}`;
       }
     }
   </script>

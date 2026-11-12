@@ -165,6 +165,9 @@ class ConsensusMasterAgent:
         prices = [cd.close for cd in candles]
         rsi = calc_rsi(prices, 14)
         upper_bb, mid_bb, lower_bb = calc_bollinger(prices, 20)
+        ema9 = calc_ema(prices, 9)
+        ema21 = calc_ema(prices, 21)
+        ema50 = calc_ema(prices, min(50, len(prices)))
 
         rng = max(1.0, c.range_size)
         lw_ratio = c.lower_wick / rng
@@ -177,6 +180,77 @@ class ConsensusMasterAgent:
         recent_high = max(past_highs[-8:]) if past_highs else c.high
         recent_low = min(past_lows[-8:]) if past_lows else c.low
 
+        # =============================================================
+        # 0. ESCUDO ANTI-MANIPULACIÓN DE BROKER (OTC SHIELD)
+        # =============================================================
+        # En opciones binarias (especialmente OTC), los brokers inyectan
+        # micro-mechas y dojis artificiales para liquidar órdenes.
+        # En temporalidad de 5 MINUTOS (M5), el volumen acumulado hace que el
+        # broker no pueda manipular el movimiento macro.
+        
+        # A) Detección de Spike Anómalo (Mecha artificial del broker)
+        is_spike_manipulation = (uw_ratio >= 0.68 or lw_ratio >= 0.68) and c.body_size < 3.5
+        
+        # B) Detección de Ruido Plano / Doji sin volumen institucional
+        avg_body = float(np.mean([cd.body_size for cd in candles[-5:]])) if len(candles) >= 5 else c.body_size
+        is_flat_doji = c.body_size < 2.0 or rng < 3.0 or (c.body_size < avg_body * 0.22)
+
+        if is_spike_manipulation:
+            return {
+                "signal": "ESPERAR",
+                "confidence": 30,
+                "grade": "F",
+                "setup": "Spike Anómalo de Broker",
+                "recommended_time": "5 MINUTOS (M5)",
+                "duration_seconds": 300,
+                "explanation": "🛡️ ESCUDO ANTI-BROKER: Mecha anómala extrema detectada (>68% rango). Posible spike de manipulación OTC. Señal bloqueada para proteger capital.",
+                "next_candle": {
+                    "direction": "INDECISIÓN",
+                    "label": "🔮 PRÓXIMA VELA: ⚠️ MANIPULACIÓN OTC DETECTADA",
+                    "probability": 30,
+                    "reason": "Spike anómalo de broker"
+                },
+                "prob_call": 50.0,
+                "prob_put": 50.0,
+                "rsi": rsi,
+                "trend": "Manipulado",
+                "count": len(candles),
+                "agents": {
+                    "price_action": {"vote": "ESPERAR", "pattern": "Spike Manipulado"},
+                    "structure": {"vote": "ESPERAR", "zone": "Zona Peligrosa OTC"},
+                    "indicators": {"vote": "ESPERAR", "reason": f"RSI {rsi}"},
+                    "trap": {"vote": "ESPERAR", "trap": "Trampa del Broker"}
+                }
+            }
+
+        if is_flat_doji:
+            return {
+                "signal": "ESPERAR",
+                "confidence": 35,
+                "grade": "F",
+                "setup": "Mercado Plano / Doji",
+                "recommended_time": "5 MINUTOS (M5)",
+                "duration_seconds": 300,
+                "explanation": "🛡️ PROTECCIÓN DE CAPITAL: Mercado plano o doji sin volumen. Broker sin liquidez direccional. Esperando vela de 5m con volumen institucional.",
+                "next_candle": {
+                    "direction": "INDECISIÓN",
+                    "label": "🔮 PRÓXIMA VELA: ⚖️ INDECISIÓN",
+                    "probability": 50,
+                    "reason": "Doji / Sin volumen"
+                },
+                "prob_call": 50.0,
+                "prob_put": 50.0,
+                "rsi": rsi,
+                "trend": "Lateral",
+                "count": len(candles),
+                "agents": {
+                    "price_action": {"vote": "ESPERAR", "pattern": "Doji Plano"},
+                    "structure": {"vote": "ESPERAR", "zone": "Rango Estrecho"},
+                    "indicators": {"vote": "ESPERAR", "reason": f"RSI {rsi}"},
+                    "trap": {"vote": "ESPERAR", "trap": "Sin volumen"}
+                }
+            }
+
         signal = "ESPERAR"
         confidence = 50
         grade = "—"
@@ -188,7 +262,6 @@ class ConsensusMasterAgent:
 
         # -------------------------------------------------------------
         # 1. SETUP A+: TRAMPA DE LIQUIDEZ SMART MONEY (SMC TURTLE SOUP)
-        # Falsa ruptura de máximo/mínimo previo y cierre de vuelta al rango
         # -------------------------------------------------------------
         if c.low < recent_low and c.close > recent_low and lw_ratio >= 0.40:
             signal = "CALL"
@@ -197,7 +270,7 @@ class ConsensusMasterAgent:
             setup_name = "Trampa de Osos (Bear Trap SMC)"
             reason = f"Barrido de liquidez bajo mínimos ({recent_low:.1f}). Absorción de compras con {int(lw_ratio*100)}% mecha inferior."
             next_candle_dir = "SUBE"
-            next_candle_label = f"🔮 PRÓXIMA VELA: 🟢 SUBE ({confidence}%)"
+            next_candle_label = f"🔮 PRÓXIMA VELA (5M): 🟢 SUBE ({confidence}%)"
             next_candle_prob = confidence
 
         elif c.high > recent_high and c.close < recent_high and uw_ratio >= 0.40:
@@ -207,45 +280,43 @@ class ConsensusMasterAgent:
             setup_name = "Trampa de Toros (Bull Trap SMC)"
             reason = f"Barrido de liquidez sobre máximos ({recent_high:.1f}). Rechazo masivo de venta con {int(uw_ratio*100)}% mecha superior."
             next_candle_dir = "BAJA"
-            next_candle_label = f"🔮 PRÓXIMA VELA: 🔴 BAJA ({confidence}%)"
+            next_candle_label = f"🔮 PRÓXIMA VELA (5M): 🔴 BAJA ({confidence}%)"
             next_candle_prob = confidence
 
         # -------------------------------------------------------------
         # 2. SETUP A+: RECHAZO ELÁSTICO DE MECHA (PINBAR / MARTILLO PURO)
-        # Mecha >= 50% del total, cuerpo pequeño, mecha contraria mínima
         # -------------------------------------------------------------
         elif lw_ratio >= 0.50 and uw_ratio <= 0.22:
             signal = "CALL"
             confidence = min(96, int(85 + lw_ratio * 15))
             grade = "A+"
-            setup_name = "Martillo / Pinbar Alcista de Alta Precisión"
-            reason = f"Fuerte rechazo comprador: {int(lw_ratio*100)}% de mecha inferior. Agotamiento total de vendedores."
+            setup_name = "Martillo / Pinbar Alcista Institucional"
+            reason = f"Fuerte rechazo comprador: {int(lw_ratio*100)}% de mecha inferior. Absorción confirmada."
             next_candle_dir = "SUBE"
-            next_candle_label = f"🔮 PRÓXIMA VELA: 🟢 SUBE ({confidence}%)"
+            next_candle_label = f"🔮 PRÓXIMA VELA (5M): 🟢 SUBE ({confidence}%)"
             next_candle_prob = confidence
 
         elif uw_ratio >= 0.50 and lw_ratio <= 0.22:
             signal = "PUT"
             confidence = min(96, int(85 + uw_ratio * 15))
             grade = "A+"
-            setup_name = "Estrella Fugaz / Pinbar Bajista de Alta Precisión"
-            reason = f"Fuerte rechazo vendedor: {int(uw_ratio*100)}% de mecha superior. Agotamiento total de compradores."
+            setup_name = "Estrella Fugaz / Pinbar Bajista Institucional"
+            reason = f"Fuerte rechazo vendedor: {int(uw_ratio*100)}% de mecha superior. Agotamiento de compras."
             next_candle_dir = "BAJA"
-            next_candle_label = f"🔮 PRÓXIMA VELA: 🔴 BAJA ({confidence}%)"
+            next_candle_label = f"🔮 PRÓXIMA VELA (5M): 🔴 BAJA ({confidence}%)"
             next_candle_prob = confidence
 
         # -------------------------------------------------------------
         # 3. SETUP A+: EXPANSIÓN POR IMPULSO CONTINUO (MARUBOZU BREAKOUT)
-        # Vela expansiva consecutiva con volumen creciente y sin mecha frontal
         # -------------------------------------------------------------
         elif c.color == 1 and prev.color == 1 and c.body_size > prev.body_size * 1.15 and uw_ratio <= 0.15:
             signal = "CALL"
             confidence = 92
             grade = "A+"
             setup_name = "Impulso Marubozu de Expansión Alcista"
-            reason = "Cuerpos verdes en aceleración sin resistencia arriba. Dominio institucional continuo."
+            reason = "Cuerpos verdes en aceleración institucional sin mecha frontal. Tendencia M5 limpia."
             next_candle_dir = "SUBE"
-            next_candle_label = f"🔮 PRÓXIMA VELA: 🟢 SUBE ({confidence}%)"
+            next_candle_label = f"🔮 PRÓXIMA VELA (5M): 🟢 SUBE ({confidence}%)"
             next_candle_prob = confidence
 
         elif c.color == -1 and prev.color == -1 and c.body_size > prev.body_size * 1.15 and lw_ratio <= 0.15:
@@ -253,9 +324,9 @@ class ConsensusMasterAgent:
             confidence = 92
             grade = "A+"
             setup_name = "Impulso Marubozu de Expansión Bajista"
-            reason = "Cuerpos rojos en aceleración sin soporte abajo. Presión vendedora continua."
+            reason = "Cuerpos rojos en aceleración institucional sin mecha frontal. Presión bajista M5 limpia."
             next_candle_dir = "BAJA"
-            next_candle_label = f"🔮 PRÓXIMA VELA: 🔴 BAJA ({confidence}%)"
+            next_candle_label = f"🔮 PRÓXIMA VELA (5M): 🔴 BAJA ({confidence}%)"
             next_candle_prob = confidence
 
         # -------------------------------------------------------------
@@ -266,9 +337,9 @@ class ConsensusMasterAgent:
             confidence = 89
             grade = "A"
             setup_name = "Vela Envolvente Alcista"
-            reason = "La vela verde absorbe completamente la vela roja anterior."
+            reason = "La vela verde absorbe completamente la vela roja anterior con volumen sólido."
             next_candle_dir = "SUBE"
-            next_candle_label = f"🔮 PRÓXIMA VELA: 🟢 SUBE ({confidence}%)"
+            next_candle_label = f"🔮 PRÓXIMA VELA (5M): 🟢 SUBE ({confidence}%)"
             next_candle_prob = confidence
 
         elif prev.color == 1 and c.color == -1 and c.close <= prev.open and c.body_size > prev.body_size * 1.10:
@@ -276,9 +347,9 @@ class ConsensusMasterAgent:
             confidence = 89
             grade = "A"
             setup_name = "Vela Envolvente Bajista"
-            reason = "La vela roja absorbe completamente la vela verde anterior."
+            reason = "La vela roja absorbe completamente la vela verde anterior con volumen sólido."
             next_candle_dir = "BAJA"
-            next_candle_label = f"🔮 PRÓXIMA VELA: 🔴 BAJA ({confidence}%)"
+            next_candle_label = f"🔮 PRÓXIMA VELA (5M): 🔴 BAJA ({confidence}%)"
             next_candle_prob = confidence
 
         # -------------------------------------------------------------
@@ -291,7 +362,7 @@ class ConsensusMasterAgent:
             setup_name = "Rebote en Banda Inferior de Bollinger (RSI Sobrevendido)"
             reason = f"Perforación de Bollinger inferior con RSI={rsi}. Retorno elástico a la media."
             next_candle_dir = "SUBE"
-            next_candle_label = f"🔮 PRÓXIMA VELA: 🟢 SUBE ({confidence}%)"
+            next_candle_label = f"🔮 PRÓXIMA VELA (5M): 🟢 SUBE ({confidence}%)"
             next_candle_prob = confidence
 
         elif c.high >= upper_bb and c.close < upper_bb and rsi >= 68 and uw_ratio >= 0.35:
@@ -301,35 +372,46 @@ class ConsensusMasterAgent:
             setup_name = "Rechazo en Banda Superior de Bollinger (RSI Sobrecomprado)"
             reason = f"Perforación de Bollinger superior con RSI={rsi}. Retorno elástico a la media."
             next_candle_dir = "BAJA"
-            next_candle_label = f"🔮 PRÓXIMA VELA: 🔴 BAJA ({confidence}%)"
+            next_candle_label = f"🔮 PRÓXIMA VELA (5M): 🔴 BAJA ({confidence}%)"
             next_candle_prob = confidence
 
         # -------------------------------------------------------------
-        # 6. FILTRO DE CHOP / CONSOLIDACIÓN PLANA (PROTECCIÓN DE CAPITAL)
+        # 6. FILTRO DE TENDENCIA MACRO INSTITUCIONAL (ANTI-MANIPULACIÓN)
         # -------------------------------------------------------------
+        # Si la señal va en contra de la EMA21/EMA50 macro, reducimos confianza o pausamos
+        if signal == "CALL" and ema9 < ema21 and ema21 < ema50:
+            confidence = max(50, confidence - 15)
+            if confidence < 75:
+                signal = "ESPERAR"
+                reason = "Filtro Macro: Evitando compras en contra de la tendencia bajista general de 5m."
+        elif signal == "PUT" and ema9 > ema21 and ema21 > ema50:
+            confidence = max(50, confidence - 15)
+            if confidence < 75:
+                signal = "ESPERAR"
+                reason = "Filtro Macro: Evitando ventas en contra de la tendencia alcista general de 5m."
+
         if signal == "ESPERAR":
-            is_doji = body_ratio <= 0.18
             explanation = (
-                "Consenso IA (Modo Sniper · Esperar): "
-                + ("Vela tipo Doji / Indecisión en curso. " if is_doji else "Mercado sin patrón Sniper A+. ")
-                + "Protegiendo capital; esperando setup de alta probabilidad (Rechazo >= 50% o Impulso pleno)."
+                "Consenso IA (Anti-Broker M5 · Esperar): "
+                + (reason if reason else "Mercado sin patrón Sniper A+ de 5 minutos. ")
+                + "Protegiendo capital de manipulaciones OTC; esperando setup institucional claro."
             )
             prob_call = 50.0
             prob_put = 50.0
         else:
-            explanation = f"🎯 GATILLO SNIPER [{grade}] ({confidence}%): {setup_name}. {reason}"
+            explanation = f"🛡️ [ANTI-BROKER M5 | {grade}] ({confidence}%): {setup_name}. {reason}"
             prob_call = float(confidence) if signal == "CALL" else round(100.0 - confidence, 1)
             prob_put = float(confidence) if signal == "PUT" else round(100.0 - confidence, 1)
 
-        trend_str = "Alcista" if prices[-1] > prices[0] else "Bajista" if prices[-1] < prices[0] else "Lateral"
+        trend_str = "Alcista" if ema9 > ema21 else "Bajista" if ema9 < ema21 else "Lateral"
 
         return {
             "signal": signal,
             "confidence": confidence,
             "grade": grade,
             "setup": setup_name,
-            "recommended_time": "1 VELA (M1)" if signal != "ESPERAR" else "—",
-            "duration_seconds": 60 if signal != "ESPERAR" else 0,
+            "recommended_time": "5 MINUTOS (M5)" if signal != "ESPERAR" else "—",
+            "duration_seconds": 300 if signal != "ESPERAR" else 0,
             "explanation": explanation,
             "next_candle": {
                 "direction": next_candle_dir,
