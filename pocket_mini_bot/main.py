@@ -138,26 +138,23 @@ class MiniBot(QWidget):
         agents_layout.setContentsMargins(10, 8, 10, 8)
         agents_layout.setSpacing(3)
 
-        agents_header = QLabel("🤖 Comité de 6 Agentes IA (Triple Confluencia)")
+        agents_header = QLabel("🤖 Confluencia Triple: Velas + Tendencia + Manipulación")
         agents_header.setObjectName("agentsHeader")
         agents_layout.addWidget(agents_header)
 
-        self.agent_pa = QLabel("• Acción del Precio: Esperando datos")
-        self.agent_pa.setObjectName("agentRow")
-        self.agent_st = QLabel("• Estructura & S/R: Mapeando niveles")
-        self.agent_st.setObjectName("agentRow")
-        self.agent_ind = QLabel("• Indicadores & EMA: Calculando")
-        self.agent_ind.setObjectName("agentRow")
-        self.agent_bb = QLabel("• Bollinger & Squeeze: Monitoreando")
-        self.agent_bb.setObjectName("agentRow")
-        self.agent_macd = QLabel("• MACD & Trampas: Vigilando")
-        self.agent_macd.setObjectName("agentRow")
+        self.agent_candles = QLabel("• 📊 Velas Anteriores: Analizando secuencia")
+        self.agent_candles.setObjectName("agentRow")
+        self.agent_trend = QLabel("• 📈 Tendencia Macro: Mapeando medias EMA")
+        self.agent_trend.setObjectName("agentRow")
+        self.agent_manipulation = QLabel("• 🛡️ Anti-Manipulación: Verificando OTC")
+        self.agent_manipulation.setObjectName("agentRow")
+        self.agent_confluence = QLabel("• 🎯 Confluencia Global: Esperando alineación")
+        self.agent_confluence.setObjectName("agentRow")
 
-        agents_layout.addWidget(self.agent_pa)
-        agents_layout.addWidget(self.agent_st)
-        agents_layout.addWidget(self.agent_ind)
-        agents_layout.addWidget(self.agent_bb)
-        agents_layout.addWidget(self.agent_macd)
+        agents_layout.addWidget(self.agent_candles)
+        agents_layout.addWidget(self.agent_trend)
+        agents_layout.addWidget(self.agent_manipulation)
+        agents_layout.addWidget(self.agent_confluence)
         root.addWidget(self.agents_frame)
 
         # Timeframe mode selector (MTF: 5m Analysis + 1m Entry default)
@@ -679,26 +676,21 @@ class MiniBot(QWidget):
     def update_agent_display(self, agents_dict):
         if not agents_dict:
             return
-        pa = agents_dict.get("price_action", {})
-        st = agents_dict.get("structure", {})
-        ind = agents_dict.get("indicators", {})
-        bb = agents_dict.get("bollinger", {})
-        macd = agents_dict.get("macd", {})
-        trap = agents_dict.get("trap", {})
+        cd = agents_dict.get("candles", {})
+        tr = agents_dict.get("trend", {})
+        mn = agents_dict.get("manipulation", {})
+        cf = agents_dict.get("confluence", {})
 
-        def fmt(tag, d, key):
+        def fmt(tag, d):
             vote = d.get("vote", "—")
-            sub = d.get(key, d.get("reason", d.get("state", "")))
+            detail = d.get("detail", d.get("status", ""))
             icon = "🟢" if vote == "CALL" else "🔴" if vote == "PUT" else "⚪"
-            return f"{icon} {tag}: {vote} ({sub[:26]})"
+            return f"{icon} {tag}: {vote} ({detail[:28]})"
 
-        self.agent_pa.setText(fmt("Patrones", pa, "pattern"))
-        self.agent_st.setText(fmt("Estructura S/R", st, "zone"))
-        self.agent_ind.setText(fmt("Indicadores", ind, "reason"))
-        self.agent_bb.setText(fmt("Bollinger", bb, "state"))
-        target_agent = trap if trap.get("vote") != "ESPERAR" else macd
-        target_key = "trap" if trap.get("vote") != "ESPERAR" else "state"
-        self.agent_macd.setText(fmt("MACD/Trampa", target_agent, target_key))
+        self.agent_candles.setText(fmt("Velas Anteriores", cd))
+        self.agent_trend.setText(fmt("Tendencia Macro", tr))
+        self.agent_manipulation.setText(fmt("Anti-Manipulación", mn))
+        self.agent_confluence.setText(fmt("Confluencia Triple", cf))
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

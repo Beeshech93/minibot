@@ -381,11 +381,11 @@
 
     <!-- Multi-Agent Intelligence Status Panel -->
     <div class="agents-panel">
-      <div class="agents-header">🤖 Consenso de Agentes IA (4 especialistas)</div>
-      <div class="agent-row" id="agentPa">⚪ Patrones: Esperando datos</div>
-      <div class="agent-row" id="agentSt">⚪ Estructura S/R: Mapeando niveles</div>
-      <div class="agent-row" id="agentInd">⚪ Indicadores & EMA: Calculando</div>
-      <div class="agent-row" id="agentMom">⚪ Flujo/Volumen: Monitoreando</div>
+      <div class="agents-header">🤖 Confluencia Triple IA (3 Pilares)</div>
+      <div class="agent-row" id="agentCandles">⚪ Velas Anteriores: Analizando secuencia</div>
+      <div class="agent-row" id="agentTrend">⚪ Tendencia Macro: Mapeando medias EMA</div>
+      <div class="agent-row" id="agentManip">⚪ Anti-Manipulación Broker: Escaneando spikes</div>
+      <div class="agent-row" id="agentConf">⚪ Confluencia Global: Evaluando 3 pilares</div>
     </div>
 
     <!-- Info banner -->
@@ -484,10 +484,10 @@
     const infoBanner = document.getElementById('infoBanner');
     const footerText = document.getElementById('footerText');
 
-    const agentPa = document.getElementById('agentPa');
-    const agentSt = document.getElementById('agentSt');
-    const agentInd = document.getElementById('agentInd');
-    const agentMom = document.getElementById('agentMom');
+    const agentCandles = document.getElementById('agentCandles');
+    const agentTrend = document.getElementById('agentTrend');
+    const agentManip = document.getElementById('agentManip');
+    const agentConf = document.getElementById('agentConf');
 
     const timeMode = document.getElementById('timeMode');
     const intervalSelect = document.getElementById('intervalSelect');
@@ -552,28 +552,20 @@
        ========================================================== */
 
     function evaluateMultiAgentSystem(candles) {
-      if (candles.length < 4) return null;
+      if (candles.length < 3) return null;
 
       const prices = candles.map(c => c.close);
       const highs = candles.map(c => c.high);
       const lows = candles.map(c => c.low);
       const currentPrice = prices[prices.length - 1];
 
-      const last = candles[candles.length - 1];
+      const c = candles[candles.length - 1];
       const prev = candles[candles.length - 2];
       const prev2 = candles[candles.length - 3] || prev;
-      const lastRange = Math.max(1.5, last.high - last.low);
-      const lowerRatio = last.lowerWick / lastRange;
-      const upperRatio = last.upperWick / lastRange;
-      const bodyRatio = last.bodySize / lastRange;
-
-      // 0. ESCUDO ANTI-MANIPULACIÓN DE BROKER (OTC SHIELD)
-      // Detecta micro-spikes artificiales y mechas extremas que los brokers usan para liquidar
-      const isSpikeManipulation = (upperRatio >= 0.68 || lowerRatio >= 0.68) && last.bodySize < 3.5;
-
-      const recentBodies = candles.slice(-5).map(c => c.bodySize);
-      const avgRecentBody = recentBodies.reduce((a, b) => a + b, 0) / recentBodies.length;
-      const isFlatDoji = last.bodySize < 2.0 || lastRange < 3.0 || (last.bodySize < avgRecentBody * 0.20 && lastRange < avgRecentBody * 0.8);
+      const rng = Math.max(1.0, c.rangeSize || (c.high - c.low));
+      const lwRatio = c.lowerWick / rng;
+      const uwRatio = c.upperWick / rng;
+      const bodyRatio = c.bodySize / rng;
 
       // INDICADORES BASE
       function calcEma(series, period) {
@@ -607,9 +599,17 @@
       const windowBb = Math.min(20, prices.length);
       const sliceBb = prices.slice(-windowBb);
       const basis = sliceBb.reduce((a, b) => a + b, 0) / windowBb;
-      const std = Math.sqrt(sliceBb.reduce((a, b) => a + Math.pow(b - basis, 2), 0) / windowBb);
+      const std = Math.sqrt(sliceBb.reduce((a, b) => a + Math.pow(b - basis, 2), 0) / windowBb) || 1.0;
       const upperBb = basis + 2.0 * std;
       const lowerBb = basis - 2.0 * std;
+
+      // Extremos de las últimas velas previas (excluyendo la actual)
+      const pastHighs = highs.slice(0, -1);
+      const pastLows = lows.slice(0, -1);
+      const recentSliceH = pastHighs.slice(-8);
+      const recentSliceL = pastLows.slice(-8);
+      const recentHigh = recentSliceH.length ? Math.max(...recentSliceH) : c.high;
+      const recentLow = recentSliceL.length ? Math.min(...recentSliceL) : c.low;
 
       // Mapeo de Soporte y Resistencia Global del Gráfico
       const maxH = Math.max(...highs);
@@ -626,239 +626,293 @@
         else break;
       }
 
+      // =============================================================
+      // PILAR 1: ANÁLISIS DE VELAS ANTERIORES (SECUENCIA & MOMENTUM)
+      // =============================================================
+      let p1_vote = "ESPERAR";
+      let p1_score = 50;
+      let p1_status = "Neutral";
+      let p1_detail = "Sin patrón claro en velas anteriores";
+
+      const isMorningStar = (
+        prev2.color === -1 &&
+        prev.bodySize <= prev2.bodySize * 0.45 &&
+        c.color === 1 &&
+        c.close >= (prev2.open + prev2.close) / 2.0
+      );
+      const isEveningStar = (
+        prev2.color === 1 &&
+        prev.bodySize <= prev2.bodySize * 0.45 &&
+        c.color === -1 &&
+        c.close <= (prev2.open + prev2.close) / 2.0
+      );
+      const isBullEngulf = (
+        prev.color === -1 &&
+        c.color === 1 &&
+        c.close >= prev.open &&
+        c.bodySize > prev.bodySize * 1.10
+      );
+      const isBearEngulf = (
+        prev.color === 1 &&
+        c.color === -1 &&
+        c.close <= prev.open &&
+        c.bodySize > prev.bodySize * 1.10
+      );
+      const isBullMarubozu = (
+        c.color === 1 &&
+        prev.color === 1 &&
+        c.bodySize > prev.bodySize * 1.10 &&
+        uwRatio <= 0.15 &&
+        bodyRatio >= 0.65
+      );
+      const isBearMarubozu = (
+        c.color === -1 &&
+        prev.color === -1 &&
+        c.bodySize > prev.bodySize * 1.10 &&
+        lwRatio <= 0.15 &&
+        bodyRatio >= 0.65
+      );
+      const isHammerRejection = (lwRatio >= 0.48 && bodyRatio <= 0.40);
+      const isStarRejection = (uwRatio >= 0.48 && bodyRatio <= 0.40);
+
+      if (consecGreen >= 3) {
+        p1_vote = "ESPERAR";
+        p1_status = "Agotamiento";
+        p1_detail = `Agotamiento: ${consecGreen + 1} verdes seguidas (riesgo de retroceso)`;
+      } else if (consecRed >= 3) {
+        p1_vote = "ESPERAR";
+        p1_status = "Agotamiento";
+        p1_detail = `Agotamiento: ${consecRed + 1} rojas seguidas (riesgo de rebote)`;
+      } else if (isMorningStar) {
+        p1_vote = "CALL";
+        p1_score = 92;
+        p1_status = "Giro 3 Velas";
+        p1_detail = "Morning Star confirmado en 3 velas";
+      } else if (isEveningStar) {
+        p1_vote = "PUT";
+        p1_score = 92;
+        p1_status = "Giro 3 Velas";
+        p1_detail = "Evening Star confirmado en 3 velas";
+      } else if (isBullEngulf) {
+        p1_vote = "CALL";
+        p1_score = 89;
+        p1_status = "Envolvente";
+        p1_detail = "Vela verde absorbe a la roja anterior";
+      } else if (isBearEngulf) {
+        p1_vote = "PUT";
+        p1_score = 89;
+        p1_status = "Envolvente";
+        p1_detail = "Vela roja absorbe a la verde anterior";
+      } else if (isBullMarubozu) {
+        p1_vote = "CALL";
+        p1_score = 90;
+        p1_status = "Impulso Sólido";
+        p1_detail = "Marubozu verde expansivo sin mecha frontal";
+      } else if (isBearMarubozu) {
+        p1_vote = "PUT";
+        p1_score = 90;
+        p1_status = "Impulso Sólido";
+        p1_detail = "Marubozu rojo expansivo sin mecha frontal";
+      } else if (isHammerRejection) {
+        p1_vote = "CALL";
+        p1_score = 91;
+        p1_status = "Rechazo Mecha";
+        p1_detail = `Martillo con ${Math.round(lwRatio * 100)}% mecha inferior`;
+      } else if (isStarRejection) {
+        p1_vote = "PUT";
+        p1_score = 91;
+        p1_status = "Rechazo Mecha";
+        p1_detail = `Estrella fugaz con ${Math.round(uwRatio * 100)}% mecha superior`;
+      }
+
+      // =============================================================
+      // PILAR 2: ANÁLISIS DE LA TENDENCIA (ESTRUCTURA & MEDIAS MÓVILES)
+      // =============================================================
+      let p2_vote = "ESPERAR";
+      let p2_score = 50;
+      let p2_status = "Lateral";
+      let p2_detail = "Sin tendencia clara";
+
+      const bullTrendStrong = (ema9 > ema21 && ema21 > ema50);
+      const bearTrendStrong = (ema9 < ema21 && ema21 < ema50);
+      const softBull = (ema9 > ema21 && currentPrice >= ema21);
+      const softBear = (ema9 < ema21 && currentPrice <= ema21);
+
+      if (bullTrendStrong) {
+        p2_vote = "CALL";
+        p2_score = 92;
+        p2_status = "Alcista Fuerte";
+        p2_detail = "EMA 9>21>50 alineadas al alza";
+      } else if (bearTrendStrong) {
+        p2_vote = "PUT";
+        p2_score = 92;
+        p2_status = "Bajista Fuerte";
+        p2_detail = "EMA 9<21<50 alineadas a la baja";
+      } else if (softBull) {
+        p2_vote = "CALL";
+        p2_score = 82;
+        p2_status = "Alcista Moderada";
+        p2_detail = "EMA 9>21 precio sobre media";
+      } else if (softBear) {
+        p2_vote = "PUT";
+        p2_score = 82;
+        p2_status = "Bajista Moderada";
+        p2_detail = "EMA 9<21 precio bajo media";
+      } else {
+        p2_vote = "NEUTRO";
+        p2_score = 60;
+        p2_status = "Rango Lateral";
+        p2_detail = "Medias entrelazadas (Consolidación)";
+      }
+
+      // =============================================================
+      // PILAR 3: ESCUDO & DETECCIÓN DE MANIPULACIÓN DE BROKER (OTC)
+      // =============================================================
+      const isBullTrap = (c.high > recentHigh && c.close < recentHigh && uwRatio >= 0.35);
+      const isBearTrap = (c.low < recentLow && c.close > recentLow && lwRatio >= 0.35);
+
+      const isSpikeManipulation = (uwRatio >= 0.68 || lwRatio >= 0.68) && c.bodySize < 3.5;
+      const recentBodies = candles.slice(-5).map(cd => cd.bodySize);
+      const avgBody = recentBodies.reduce((a, b) => a + b, 0) / recentBodies.length;
+      const isFlatDoji = c.bodySize < 2.0 || rng < 3.0 || (c.bodySize < avgBody * 0.22);
+
+      let p3_is_safe = true;
+      let p3_vote = "NEUTRO";
+      let p3_status = "Limpio";
+      let p3_detail = "Sin manipulación detectable";
+
       if (isSpikeManipulation) {
-        return {
-          signal: "ESPERAR",
-          grade: "F",
-          confidence: 25,
-          probCall: 50,
-          probPut: 50,
-          recommendedTime: "1 MINUTO (M1)",
-          durationSeconds: 60,
-          rsi: rsi,
-          trend: "Manipulado OTC",
-          count: candles.length,
-          nextCandle: { dir: "INDECISIÓN", label: "🔮 PRÓXIMA VELA (1M): ⚠️ MANIPULACIÓN OTC DETECTADA", prob: 25, reason: "Spike anómalo de broker" },
-          explanation: "🛡️ ESCUDO ANTI-BROKER: Mecha extrema artificial detectada (>68% rango). Posible spike de manipulación OTC. Señal 1M bloqueada para proteger capital.",
-          agents: {
-            pa: { vote: "ESPERAR", detail: "Spike Manipulado" },
-            st: { vote: "ESPERAR", detail: "Zona Peligrosa OTC" },
-            ind: { vote: "ESPERAR", detail: `RSI ${rsi}` },
-            mom: { vote: "ESPERAR", detail: "Trampa de Broker" }
-          }
-        };
+        p3_is_safe = false;
+        p3_status = "Spike OTC Falso";
+        p3_detail = "Mecha extrema artificial detectada (>68% rango). Bloqueado.";
+      } else if (isFlatDoji) {
+        p3_is_safe = false;
+        p3_status = "Doji / Sin Volumen";
+        p3_detail = "Vela plana sin volumen institucional. Bloqueado.";
+      } else if (isBullTrap) {
+        p3_vote = "PUT";
+        p3_status = "Trampa de Toros (SMC)";
+        p3_detail = `Falsa ruptura de máximos (${recentHigh.toFixed(1)}). Absorción bajista.`;
+      } else if (isBearTrap) {
+        p3_vote = "CALL";
+        p3_status = "Trampa de Osos (SMC)";
+        p3_detail = `Falsa ruptura de mínimos (${recentLow.toFixed(1)}). Absorción alcista.`;
+      } else if (distToRes < 0.035) {
+        p3_is_safe = false;
+        p3_status = "Techo Inmediato";
+        p3_detail = "Precio rozando resistencia máxima (alto riesgo de rechazo).";
+      } else if (distToSup < 0.035) {
+        p3_is_safe = false;
+        p3_status = "Piso Inmediato";
+        p3_detail = "Precio rozando soporte mínimo (alto riesgo de rebote).";
+      } else if (rsi > 70) {
+        p3_is_safe = false;
+        p3_status = "RSI Sobrecomprado";
+        p3_detail = `RSI extremo (${rsi}). Riesgo de comprar en el pico.`;
+      } else if (rsi < 30) {
+        p3_is_safe = false;
+        p3_status = "RSI Sobrevendido";
+        p3_detail = `RSI extremo (${rsi}). Riesgo de vender en el suelo.`;
       }
 
-      if (isFlatDoji) {
-        return {
-          signal: "ESPERAR",
-          grade: "F",
-          confidence: 35,
-          probCall: 50,
-          probPut: 50,
-          recommendedTime: "1 MINUTO (M1)",
-          durationSeconds: 60,
-          rsi: rsi,
-          trend: "Consolidación Plana",
-          count: candles.length,
-          nextCandle: { dir: "INDECISIÓN", label: "🔮 PRÓXIMA VELA (1M): ⚖️ INDECISIÓN", prob: 50, reason: "Doji plano sin volumen" },
-          explanation: "🛡️ PROTECCIÓN DE CAPITAL: Mercado plano o doji sin volumen institucional. Esperando vela de 1M confirmada por estructura 5M.",
-          agents: {
-            pa: { vote: "ESPERAR", detail: "Doji Plano" },
-            st: { vote: "ESPERAR", detail: "Rango Estrecho" },
-            ind: { vote: "ESPERAR", detail: `RSI ${rsi}` },
-            mom: { vote: "ESPERAR", detail: "Sin Volumen" }
-          }
-        };
+      // =============================================================
+      // REGLA DE ORO: CONFLUENCIA DE LOS 3 PILARES PARA ENTRAR
+      // =============================================================
+      let signal = "ESPERAR";
+      let confidence = 50;
+      let grade = "—";
+      let setupName = "";
+      let reason = "";
+      let nextCandleDir = "INDECISIÓN";
+      let nextCandleLabel = "🔮 PRÓXIMA VELA (1M): ⚖️ INDECISIÓN";
+      let nextCandleProb = 50;
+
+      // Caso A: Trampa de Liquidez Detectada (Aprovechamos la manipulación del broker)
+      if (p3_vote === "PUT" && p3_is_safe && p2_vote !== "CALL") {
+        signal = "PUT";
+        confidence = 94;
+        grade = "A+";
+        setupName = "Trampa de Toros (SMC Bear Trap)";
+        reason = "Manipulación de broker detectada: falsa ruptura y rechazo masivo";
+        nextCandleDir = "BAJA";
+        nextCandleLabel = `🔮 PRÓXIMA VELA (1M): 🔴 BAJA (${confidence}%)`;
+        nextCandleProb = confidence;
+      } else if (p3_vote === "CALL" && p3_is_safe && p2_vote !== "PUT") {
+        signal = "CALL";
+        confidence = 94;
+        grade = "A+";
+        setupName = "Trampa de Osos (SMC Bull Trap)";
+        reason = "Manipulación de broker detectada: falso barrido y absorción de compras";
+        nextCandleDir = "SUBE";
+        nextCandleLabel = `🔮 PRÓXIMA VELA (1M): 🟢 SUBE (${confidence}%)`;
+        nextCandleProb = confidence;
       }
-
-      // ==========================================================
-      // MOTOR SNIPER CUANTITATIVO: 4 GATILLOS A+ DE ALTA EFECTIVIDAD
-      // ==========================================================
-      let sniperSignal = "ESPERAR";
-      let sniperConfidence = 50;
-      let sniperGrade = "F";
-      let sniperSetup = "Sin Gatillo";
-      let sniperReason = "Esperando confluencia de alta probabilidad";
-
-      // 1. GATILLO 1: RECHAZO ELÁSTICO DE MECHA (PINBAR / MARTILLO EN EXTREMO)
-      if (lowerRatio >= 0.48 && bodyRatio <= 0.40) {
-        sniperSignal = "CALL";
-        sniperGrade = "A+";
-        sniperConfidence = 91;
-        sniperSetup = "Rechazo Elástico de Mecha (Pinbar Alcista)";
-        sniperReason = `Fuerte rechazo inferior (${Math.round(lowerRatio * 100)}% mecha). Absorción masiva de compradores`;
-      } else if (upperRatio >= 0.48 && bodyRatio <= 0.40) {
-        sniperSignal = "PUT";
-        sniperGrade = "A+";
-        sniperConfidence = 91;
-        sniperSetup = "Rechazo Elástico de Mecha (Pinbar Bajista)";
-        sniperReason = `Fuerte rechazo superior (${Math.round(upperRatio * 100)}% mecha). Absorción masiva de vendedores`;
-      }
-
-      // 2. GATILLO 2: EXPANSION DE IMPULSO CONTINUO (MARUBOZU)
-      if (sniperGrade !== "A+") {
-        if (last.color === 1 && prev.color === 1 && bodyRatio >= 0.65 && upperRatio <= 0.15) {
-          sniperSignal = "CALL";
-          sniperGrade = "A+";
-          sniperConfidence = 89;
-          sniperSetup = "Marubozu Momentum Alcista";
-          sniperReason = "Cuerpo verde expansivo sin resistencia superior. Impulso institucional continuo";
-        } else if (last.color === -1 && prev.color === -1 && bodyRatio >= 0.65 && lowerRatio <= 0.15) {
-          sniperSignal = "PUT";
-          sniperGrade = "A+";
-          sniperConfidence = 89;
-          sniperSetup = "Marubozu Momentum Bajista";
-          sniperReason = "Cuerpo rojo expansivo sin rechazo inferior. Impulso bajista dominante";
+      // Caso B: Confluencia Triple (Velas Anteriores + Tendencia + Anti-Manipulación Seguro)
+      else if (p3_is_safe) {
+        if (p1_vote === "CALL" && (p2_vote === "CALL" || (p2_vote === "NEUTRO" && c.low <= lowerBb))) {
+          signal = "CALL";
+          confidence = Math.max(p1_score, p2_score);
+          grade = "A+";
+          setupName = p1_detail;
+          reason = `Confluencia Triple: ${p1_detail} + Tendencia ${p2_status}`;
+          nextCandleDir = "SUBE";
+          nextCandleLabel = `🔮 PRÓXIMA VELA (1M): 🟢 SUBE (${confidence}%)`;
+          nextCandleProb = confidence;
+        } else if (p1_vote === "PUT" && (p2_vote === "PUT" || (p2_vote === "NEUTRO" && c.high >= upperBb))) {
+          signal = "PUT";
+          confidence = Math.max(p1_score, p2_score);
+          grade = "A+";
+          setupName = p1_detail;
+          reason = `Confluencia Triple: ${p1_detail} + Tendencia ${p2_status}`;
+          nextCandleDir = "BAJA";
+          nextCandleLabel = `🔮 PRÓXIMA VELA (1M): 🔴 BAJA (${confidence}%)`;
+          nextCandleProb = confidence;
         }
       }
 
-      // 3. GATILLO 3: TRAMPA DE LIQUIDEZ SMART MONEY (SMC TURTLE SOUP)
-      const lookback = Math.min(10, candles.length - 1);
-      const sliceCandles = candles.slice(-lookback - 1, -1);
-      const recentHigh = Math.max(...sliceCandles.map(c => c.high));
-      const recentLow = Math.min(...sliceCandles.map(c => c.low));
+      let explanation = "";
+      let probCall = 50.0;
+      let probPut = 50.0;
 
-      if (last.high > recentHigh && last.close < recentHigh && upperRatio >= 0.35) {
-        sniperSignal = "PUT";
-        sniperGrade = "A+";
-        sniperConfidence = 94;
-        sniperSetup = "Trampa de Toros (SMC Bearish Sweep)";
-        sniperReason = "Caza de stops por encima del máximo anterior y re-ingreso bajista inmediato";
-      } else if (last.low < recentLow && last.close > recentLow && lowerRatio >= 0.35) {
-        sniperSignal = "CALL";
-        sniperGrade = "A+";
-        sniperConfidence = 94;
-        sniperSetup = "Trampa de Osos (SMC Bullish Sweep)";
-        sniperReason = "Caza de liquidez por debajo del mínimo anterior y absorción alcista inmediata";
-      }
-
-      // 4. GATILLO 4: REVERSIÓN EXTREMA BOLLINGER + RSI DIVERGENTE
-      if (rsi < 25 && last.low <= lowerBb && lowerRatio >= 0.28) {
-        sniperSignal = "CALL";
-        sniperGrade = "A+";
-        sniperConfidence = 92;
-        sniperSetup = "Reversión Extrema Bollinger + RSI";
-        sniperReason = `Perforación banda inferior con RSI en sobreventa extrema (${rsi}) y rebote elástico`;
-      } else if (rsi > 75 && last.high >= upperBb && upperRatio >= 0.28) {
-        sniperSignal = "PUT";
-        sniperGrade = "A+";
-        sniperConfidence = 92;
-        sniperSetup = "Reversión Extrema Bollinger + RSI";
-        sniperReason = `Perforación banda superior con RSI en sobrecompra extrema (${rsi}) y rechazo elástico`;
-      }
-
-      // 5. GATILLO SECUNDARIO: TENDENCIA & PULLBACK CONFIRMADO (GRADO A)
-      if (sniperGrade === "F") {
-        const bullTrend = ema9 > ema21 && ema21 > ema50;
-        const bearTrend = ema9 < ema21 && ema21 < ema50;
-
-        if (bullTrend && last.color === 1 && currentPrice > ema9 && rsi >= 48 && rsi <= 65) {
-          sniperSignal = "CALL";
-          sniperGrade = "A";
-          sniperConfidence = 83;
-          sniperSetup = "Continuación de Tendencia EMA 9>21>50";
-          sniperReason = `Estructura alcista sólida sobre EMA9 con RSI favorable (${rsi})`;
-        } else if (bearTrend && last.color === -1 && currentPrice < ema9 && rsi <= 52 && rsi >= 35) {
-          sniperSignal = "PUT";
-          sniperGrade = "A";
-          sniperConfidence = 83;
-          sniperSetup = "Continuación de Tendencia EMA 9<21<50";
-          sniperReason = `Estructura bajista bajo EMA9 con RSI favorable (${rsi})`;
+      if (signal === "ESPERAR") {
+        let blocker = "";
+        if (!p3_is_safe) {
+          blocker = `Anti-Manipulación (${p3_status}: ${p3_detail})`;
+        } else if (p1_status === "Agotamiento") {
+          blocker = `Velas Anteriores (${p1_detail})`;
+        } else if (p1_vote !== "ESPERAR" && p2_vote !== "ESPERAR" && p1_vote !== p2_vote) {
+          blocker = `Conflicto de Tendencia (Velas: ${p1_vote} vs Tendencia: ${p2_status})`;
+        } else {
+          blocker = "Esperando confluencia simultánea de Velas + Tendencia + Manipulación";
         }
+        explanation = `Consenso IA (Esperar): ${blocker}. Protegiendo saldo.`;
+        probCall = 50.0;
+        probPut = 50.0;
+      } else {
+        explanation = `🎯 [CONFLUENCIA TRIPLE | ${grade}] (${confidence}%): Entrada ${signal} (1 MIN). ${reason}.`;
+        probCall = signal === "CALL" ? confidence : Math.round(100.0 - confidence);
+        probPut = signal === "PUT" ? confidence : Math.round(100.0 - confidence);
       }
-
-      // -------------------------------------------------------------
-      // FILTRO 1: SOPORTE Y RESISTENCIA (S/R PROXIMITY SHIELD)
-      // -------------------------------------------------------------
-      if (sniperSignal === "CALL" && distToRes < 0.035) {
-        sniperSignal = "ESPERAR";
-        sniperSetup = "Bloqueo por Techo (Resistencia)";
-        sniperReason = "El precio está rozando el techo del canal. Alto riesgo de rechazo bajista.";
-      } else if (sniperSignal === "PUT" && distToSup < 0.035) {
-        sniperSignal = "ESPERAR";
-        sniperSetup = "Bloqueo por Piso (Soporte)";
-        sniperReason = "El precio está rozando el piso del canal. Alto riesgo de rebote alcista.";
-      }
-
-      // -------------------------------------------------------------
-      // FILTRO 2: AGOTAMIENTO POR VELAS CONSECUTIVAS (CLIMAX SHIELD)
-      // -------------------------------------------------------------
-      if (sniperSignal === "CALL" && consecGreen >= 3) {
-        sniperSignal = "ESPERAR";
-        sniperSetup = "Agotamiento Comprador";
-        sniperReason = `Ya van ${consecGreen + 1} velas verdes seguidas. Probabilidad estadística de retroceso roja alta.`;
-      } else if (sniperSignal === "PUT" && consecRed >= 3) {
-        sniperSignal = "ESPERAR";
-        sniperSetup = "Agotamiento Vendedor";
-        sniperReason = `Ya van ${consecRed + 1} velas rojas seguidas. Probabilidad estadística de rebote verde alta.`;
-      }
-
-      // -------------------------------------------------------------
-      // FILTRO 3: SOBREVENTA / SOBRECOMPRA EN TENDENCIA
-      // -------------------------------------------------------------
-      if (sniperSignal === "CALL" && rsi > 70) {
-        sniperSignal = "ESPERAR";
-        sniperSetup = "RSI Sobrecomprado";
-        sniperReason = `RSI en zona extrema (${rsi}). Peligro de comprar en el pico del impulso.`;
-      } else if (sniperSignal === "PUT" && rsi < 30) {
-        sniperSignal = "ESPERAR";
-        sniperSetup = "RSI Sobrevendido";
-        sniperReason = `RSI en zona extrema (${rsi}). Peligro de vender en el suelo del impulso.`;
-      }
-
-      // -------------------------------------------------------------
-      // FILTRO 4: TENDENCIA MACRO INSTITUCIONAL (ANTI-MANIPULACIÓN)
-      // -------------------------------------------------------------
-      if (sniperSignal === "CALL" && ema9 < ema21 && ema21 < ema50) {
-        sniperConfidence = Math.max(50, sniperConfidence - 15);
-        if (sniperConfidence < 75) {
-          sniperSignal = "ESPERAR";
-          sniperReason = "Filtro Macro: Evitando compras en contra de la tendencia bajista de 5m";
-        }
-      } else if (sniperSignal === "PUT" && ema9 > ema21 && ema21 > ema50) {
-        sniperConfidence = Math.max(50, sniperConfidence - 15);
-        if (sniperConfidence < 75) {
-          sniperSignal = "ESPERAR";
-          sniperReason = "Filtro Macro: Evitando ventas en contra de la tendencia alcista de 5m";
-        }
-      }
-
-      // PREDICTOR DE PRÓXIMA VELA
-      let nextDir = sniperSignal === "CALL" ? "SUBE" : sniperSignal === "PUT" ? "BAJA" : "INDECISIÓN";
-      let nextProb = sniperSignal !== "ESPERAR" ? sniperConfidence : 50;
-      let nextLabel = nextDir === "SUBE" 
-        ? `🔮 PRÓXIMA VELA (1M): 🟢 SUBE (${nextProb}%)` 
-        : nextDir === "BAJA" 
-        ? `🔮 PRÓXIMA VELA (1M): 🔴 BAJA (${nextProb}%)` 
-        : "🔮 PRÓXIMA VELA (1M): ⚖️ INDECISIÓN";
-
-      const probCallPct = sniperSignal === "CALL" ? nextProb : (sniperSignal === "PUT" ? (100 - nextProb) : 50);
-      const probPutPct = sniperSignal === "PUT" ? nextProb : (sniperSignal === "CALL" ? (100 - nextProb) : 50);
-
-      const expText = sniperSignal !== "ESPERAR"
-        ? `🎯 [MTF: Macro 5M + Señal 1M | ${sniperGrade}] Entrada ${sniperSignal} (1 MIN). Setup: ${sniperSetup}. ${sniperReason}.`
-        : `Consenso IA (MTF Macro 5M · Esperar): ${sniperReason}. Protegiendo capital de manipulaciones OTC.`;
 
       return {
-        signal: sniperSignal,
-        grade: sniperGrade,
-        setup: sniperSetup,
-        confidence: sniperConfidence,
-        probCall: probCallPct,
-        probPut: probPutPct,
-        recommendedTime: sniperSignal !== "ESPERAR" ? "1 VELA (M1)" : "—",
-        durationSeconds: sniperSignal !== "ESPERAR" ? 60 : 0,
+        signal: signal,
+        grade: grade,
+        setup: setupName,
+        confidence: confidence,
+        probCall: probCall,
+        probPut: probPut,
+        recommendedTime: signal !== "ESPERAR" ? "1 VELA (M1)" : "—",
+        durationSeconds: signal !== "ESPERAR" ? 60 : 0,
         rsi: rsi,
-        trend: ema9 > ema21 ? "Alcista" : ema9 < ema21 ? "Bajista" : "Lateral",
+        trend: p2_status,
         count: candles.length,
-        nextCandle: { dir: nextDir, label: nextLabel, prob: nextProb, reason: sniperReason },
-        explanation: expText,
+        nextCandle: { dir: nextCandleDir, label: nextCandleLabel, prob: nextCandleProb, reason: setupName || "Fuerzas equilibradas" },
+        explanation: explanation,
         agents: {
-          pa: { vote: sniperSignal === "CALL" ? "CALL" : sniperSignal === "PUT" ? "PUT" : "ESPERAR", detail: sniperSetup },
-          st: { vote: sniperSignal, detail: `Nivel ${sniperGrade}` },
-          ind: { vote: rsi < 30 ? "CALL" : rsi > 70 ? "PUT" : "ESPERAR", detail: `RSI ${rsi}` },
-          mom: { vote: sniperSignal, detail: sniperReason }
+          candles: { vote: p1_vote, status: p1_status, detail: p1_detail },
+          trend: { vote: p2_vote, status: p2_status, detail: p2_detail },
+          manipulation: { vote: p3_vote !== "NEUTRO" ? p3_vote : (!p3_is_safe ? "ESPERAR" : "LIMPIO"), status: p3_status, detail: p3_detail },
+          confluence: { vote: signal, status: grade, detail: setupName || "Esperando 3 Pilares" }
         }
       };
     }
@@ -1149,13 +1203,14 @@
 
       if (agents) {
         function fmt(tag, a) {
-          const icon = a.vote === "CALL" ? "🟢" : a.vote === "PUT" ? "🔴" : "⚪";
-          return `${icon} ${tag}: ${a.vote} (${a.detail.substring(0, 24)})`;
+          if (!a) return `⚪ ${tag}: Esperando`;
+          const icon = a.vote === "CALL" ? "🟢" : a.vote === "PUT" ? "🔴" : a.vote === "LIMPIO" ? "🟢" : "⚪";
+          return `${icon} ${tag}: ${a.vote} (${(a.detail || a.status || '').substring(0, 26)})`;
         }
-        agentPa.innerText = fmt("Patrones", agents.pa);
-        agentSt.innerText = fmt("Estructura S/R", agents.st);
-        agentInd.innerText = fmt("Indicadores", agents.ind);
-        agentMom.innerText = fmt("Momentum", agents.mom);
+        if (agentCandles && agents.candles) agentCandles.innerText = fmt("Velas Anteriores", agents.candles);
+        if (agentTrend && agents.trend) agentTrend.innerText = fmt("Tendencia Macro", agents.trend);
+        if (agentManip && agents.manipulation) agentManip.innerText = fmt("Anti-Manipulación", agents.manipulation);
+        if (agentConf && agents.confluence) agentConf.innerText = fmt("Confluencia Triple", agents.confluence);
       }
 
       footerText.innerText = "Actualizado: " + new Date().toLocaleTimeString();
