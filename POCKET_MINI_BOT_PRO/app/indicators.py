@@ -180,3 +180,4 @@ class TechnicalIndicators:
             "is_near_resistance": dist_to_res < 0.04,  # Within 4% of ceiling
             "is_near_support": dist_to_sup < 0.04      # Within 4% of floor
         }
+

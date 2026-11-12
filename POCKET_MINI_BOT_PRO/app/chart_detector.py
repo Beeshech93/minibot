@@ -49,3 +49,4 @@ class ChartDetector:
         mean_diff = float(np.mean(diff))
         self._prev_gray = gray
         return mean_diff > threshold
+

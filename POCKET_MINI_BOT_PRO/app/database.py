@@ -235,3 +235,4 @@ class DatabaseManager:
                 ON CONFLICT(setting_key) DO UPDATE SET setting_value = excluded.setting_value
             """, (key, str(value)))
             conn.commit()
+

@@ -76,3 +76,4 @@ class CaptureEngine:
                 return cv2.cvtColor(frame_rgba, cv2.COLOR_BGRA2BGR)
         except Exception:
             return None
+

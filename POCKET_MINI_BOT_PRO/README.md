@@ -81,3 +81,4 @@ El archivo `PocketMiniBotPro.app` se generará en la carpeta `dist/`.
 
 - **Pocket Mini Bot Pro** es una herramienta analítica visual y no ofrece asesoramiento financiero ni garantiza ganancias.
 - La aplicación **nunca ejecuta órdenes de forma automática**. Todas las decisiones de inversión son tomadas exclusivamente por el usuario.
+

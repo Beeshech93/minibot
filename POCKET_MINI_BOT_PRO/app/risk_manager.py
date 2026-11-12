@@ -65,3 +65,4 @@ class RiskManager:
             "is_paused": self.is_paused,
             "pause_reason": self.pause_reason
         }
+

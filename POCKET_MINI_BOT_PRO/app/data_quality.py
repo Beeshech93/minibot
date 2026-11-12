@@ -63,3 +63,4 @@ class DataQualityEvaluator:
             "is_reliable": True,
             "reason": f"Reconstrucción óptima ({count} velas con espaciado uniforme)."
         }
+

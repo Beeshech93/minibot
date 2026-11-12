@@ -73,3 +73,4 @@ class NotificationManager:
                 f"<b>Razón:</b> {signal.get('reason', '')}"
             )
             self.send_telegram(msg)
+

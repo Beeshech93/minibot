@@ -50,3 +50,4 @@ class StatisticsAggregator:
                     "win_rate": wr
                 })
             return result
+

@@ -111,3 +111,4 @@ class BacktestEngine:
             "final_capital": round(capital, 2),
             "payout_assumed": f"{self.payout_pct}%"
         }
+

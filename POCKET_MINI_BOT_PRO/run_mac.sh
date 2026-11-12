@@ -13,3 +13,4 @@ fi
 
 export PYTHONPATH="$SCRIPT_DIR:$PYTHONPATH"
 exec "$PY_EXEC" "$SCRIPT_DIR/main.py" "$@"
+

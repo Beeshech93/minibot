@@ -110,3 +110,4 @@ class SignalManager:
             else:
                 unresolved.append(sig)
         self.active_signals = unresolved
+

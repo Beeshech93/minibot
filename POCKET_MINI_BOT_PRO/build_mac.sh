@@ -37,3 +37,4 @@ echo "🎉 Compilación completada con éxito."
 echo "La aplicación se encuentra en: $SCRIPT_DIR/dist/PocketMiniBotPro.app"
 echo "Puedes moverla a tu carpeta /Applications para abrirla desde Spotlight o Finder."
 echo "=================================================="
+

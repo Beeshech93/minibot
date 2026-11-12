@@ -192,3 +192,4 @@ QProgressBar::chunk {
     border-radius: 2px;
 }
 """
+

@@ -58,3 +58,4 @@ echo ""
 echo "🎉 ¡Instalación completada con éxito!"
 echo "Para iniciar el bot ejecuta: ./run_mac.sh"
 echo "=================================================="
+
