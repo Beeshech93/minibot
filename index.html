@@ -317,12 +317,12 @@
       <option value="300">⏱️ Fijar a 5 min (M5)</option>
     </select>
 
-    <!-- Analysis Interval -->
+    <!-- Analysis Interval (Ultra-Fast confirmation) -->
     <select id="intervalSelect">
-      <option value="5">🔄 Análisis: Cada 5 segundos</option>
-      <option value="10">🔄 Análisis: Cada 10 segundos</option>
-      <option value="15">🔄 Análisis: Cada 15 segundos</option>
-      <option value="30">🔄 Análisis: Cada 30 segundos</option>
+      <option value="1">⚡ Confirmación: 1 seg (Ultra rápido)</option>
+      <option value="2">⚡ Confirmación: 2 seg (Rápido)</option>
+      <option value="3">🔄 Confirmación: 3 seg</option>
+      <option value="5">🔄 Confirmación: 5 seg</option>
     </select>
 
     <!-- Buttons -->
@@ -602,16 +602,25 @@
 
       let finalSig = "ESPERAR", finalConf = 50, finalDurLabel = "1 MIN", finalDurSec = 60;
 
-      if (callCount >= 3 && callWeights >= 0.45 && callNorm >= 78 && putCount <= 1) {
+      const hasPrimeCall = (paVote === "CALL" && paConf >= 84) || (trapVote === "CALL" && trapConf >= 86) || (bbVote === "CALL" && bbConf >= 85);
+      const hasPrimePut = (paVote === "PUT" && paConf >= 84) || (trapVote === "PUT" && trapConf >= 86) || (bbVote === "PUT" && bbConf >= 85);
+
+      const isFastCall = (hasPrimeCall && callCount >= 2 && callNorm >= 74 && putCount === 0);
+      const isStandardCall = (callCount >= 2 && callWeights >= 0.35 && callNorm >= 75 && putCount <= 1);
+
+      const isFastPut = (hasPrimePut && putCount >= 2 && putNorm >= 74 && callCount === 0);
+      const isStandardPut = (putCount >= 2 && putWeights >= 0.35 && putNorm >= 75 && callCount <= 1);
+
+      if ((isFastCall || isStandardCall) && callNorm > putNorm + 10) {
         finalSig = "CALL";
-        finalConf = Math.min(96, Math.round(callNorm));
-        if (trapVote === "CALL" || bbVote === "CALL") { finalDurLabel = "1 MIN"; finalDurSec = 60; }
+        finalConf = Math.min(96, Math.round(Math.max(callNorm, 80)));
+        if (trapVote === "CALL" || bbVote === "CALL" || isHammer) { finalDurLabel = "1 MIN"; finalDurSec = 60; }
         else if (stDetail.includes("Ruptura") || isMorningStar) { finalDurLabel = "3 MIN"; finalDurSec = 180; }
         else { finalDurLabel = "2 MIN"; finalDurSec = 120; }
-      } else if (putCount >= 3 && putWeights >= 0.45 && putNorm >= 78 && callCount <= 1) {
+      } else if ((isFastPut || isStandardPut) && putNorm > callNorm + 10) {
         finalSig = "PUT";
-        finalConf = Math.min(96, Math.round(putNorm));
-        if (trapVote === "PUT" || bbVote === "PUT") { finalDurLabel = "1 MIN"; finalDurSec = 60; }
+        finalConf = Math.min(96, Math.round(Math.max(putNorm, 80)));
+        if (trapVote === "PUT" || bbVote === "PUT" || isShootingStar) { finalDurLabel = "1 MIN"; finalDurSec = 60; }
         else if (stDetail.includes("Ruptura") || isEveningStar) { finalDurLabel = "3 MIN"; finalDurSec = 180; }
         else { finalDurLabel = "2 MIN"; finalDurSec = 120; }
       }
@@ -625,30 +634,13 @@
         trend: callNorm > putNorm ? "Alcista" : putNorm > callNorm ? "Bajista" : "Lateral",
         count: candles.length,
         explanation: finalSig !== "ESPERAR"
-          ? `Triple Confluencia (${finalConf}% · ${finalSig === "CALL" ? callCount : putCount} agentes): ${finalSig} a ${finalDurLabel}. Gatillo: ${paDetail} | Nivel: ${stDetail}.`
-          : `Consenso IA (Esperar · ${Math.round(Math.max(callNorm, putNorm))}%): Esperando confluencia de 3 agentes para operar con alta probabilidad.`,
+          ? `Confirmación Rápida (${finalConf}% · ${finalSig === "CALL" ? callCount : putCount} agentes): ${finalSig} a ${finalDurLabel}. Gatillo: ${paDetail} | Nivel: ${stDetail}.`
+          : `Consenso IA (Esperar · ${Math.round(Math.max(callNorm, putNorm))}%): Esperando gatillo rápido para operar.`,
         agents: {
           pa: { vote: paVote, detail: paDetail },
           st: { vote: stVote, detail: stDetail },
           ind: { vote: indVote, detail: indDetail },
           mom: { vote: trapVote !== "ESPERAR" ? trapVote : macdVote, detail: trapVote !== "ESPERAR" ? trapDetail : macdDetail }
-        }
-      };
-    }
-
-      return {
-        signal: finalSig,
-        confidence: finalConf,
-        recommendedTime: finalDurLabel,
-        durationSeconds: finalDurSec,
-        rsi: rsi,
-        trend: callScore > putScore ? "Alcista" : putScore > callScore ? "Bajista" : "Lateral",
-        count: candles.length,
-        agents: {
-          pa: { vote: paVote, detail: paDetail },
-          st: { vote: stVote, detail: stDetail },
-          ind: { vote: indVote, detail: indDetail },
-          mom: { vote: momVote, detail: momDetail }
         }
       };
     }

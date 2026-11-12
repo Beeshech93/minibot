@@ -488,19 +488,36 @@ class ConsensusMasterAgent:
             put_norm_score *= 0.35
             put_confluences = max(0, put_confluences - 1)
 
-        # 4. CONDICIÓN DE TRIPLE CONFLUENCIA INSTITUCIONAL
-        # Mínimo 3 agentes de acuerdo, peso activo >= 45%, confianza normalizada >= 78% y sin contradicciones mayores
+        # 4. CONDICIÓN DE RÁPIDA CONFIRMACIÓN INSTITUCIONAL (Fast Trigger Engine)
+        has_prime_trigger_call = (
+            (r_pa.get("vote") == "CALL" and r_pa.get("confidence", 0) >= 84) or
+            (r_trap.get("vote") == "CALL" and r_trap.get("confidence", 0) >= 86) or
+            (r_bb.get("vote") == "CALL" and r_bb.get("confidence", 0) >= 85)
+        )
+        has_prime_trigger_put = (
+            (r_pa.get("vote") == "PUT" and r_pa.get("confidence", 0) >= 84) or
+            (r_trap.get("vote") == "PUT" and r_trap.get("confidence", 0) >= 86) or
+            (r_bb.get("vote") == "PUT" and r_bb.get("confidence", 0) >= 85)
+        )
+
         final_signal = "ESPERAR"
         final_confidence = 50
         recommended_time = "—"
         duration_seconds = 0
 
-        if call_confluences >= 3 and call_weight_sum >= 0.45 and call_norm_score >= 78 and put_confluences <= 1:
+        # Disparo rápido: Gatillo clave + confirmación secundaria (>= 2 agentes de acuerdo)
+        is_fast_call = (has_prime_trigger_call and call_confluences >= 2 and call_norm_score >= 74 and put_confluences == 0)
+        is_standard_call = (call_confluences >= 2 and call_weight_sum >= 0.35 and call_norm_score >= 75 and put_confluences <= 1)
+
+        is_fast_put = (has_prime_trigger_put and put_confluences >= 2 and put_norm_score >= 74 and call_confluences == 0)
+        is_standard_put = (put_confluences >= 2 and put_weight_sum >= 0.35 and put_norm_score >= 75 and call_confluences <= 1)
+
+        if (is_fast_call or is_standard_call) and call_norm_score > put_norm_score + 10:
             final_signal = "CALL"
-            final_confidence = min(96, int(call_norm_score))
+            final_confidence = min(96, int(max(call_norm_score, 80)))
             # Tiempo óptimo según gatillo
-            if r_trap.get("vote") == "CALL" or r_bb.get("vote") == "CALL":
-                recommended_time = "1 MIN"   # Rebote elástico
+            if r_trap.get("vote") == "CALL" or r_bb.get("vote") == "CALL" or "Martillo" in r_pa.get("pattern", ""):
+                recommended_time = "1 MIN"   # Rebote elástico rápido
                 duration_seconds = 60
             elif "Ruptura" in r_st.get("zone", "") or "Morning" in r_pa.get("pattern", ""):
                 recommended_time = "3 MIN"   # Ruptura con continuación
@@ -509,10 +526,10 @@ class ConsensusMasterAgent:
                 recommended_time = "2 MIN"   # Tendencial estándar
                 duration_seconds = 120
 
-        elif put_confluences >= 3 and put_weight_sum >= 0.45 and put_norm_score >= 78 and call_confluences <= 1:
+        elif (is_fast_put or is_standard_put) and put_norm_score > call_norm_score + 10:
             final_signal = "PUT"
-            final_confidence = min(96, int(put_norm_score))
-            if r_trap.get("vote") == "PUT" or r_bb.get("vote") == "PUT":
+            final_confidence = min(96, int(max(put_norm_score, 80)))
+            if r_trap.get("vote") == "PUT" or r_bb.get("vote") == "PUT" or "Estrella" in r_pa.get("pattern", ""):
                 recommended_time = "1 MIN"   # Corrección elástica rápida
                 duration_seconds = 60
             elif "Ruptura" in r_st.get("zone", "") or "Evening" in r_pa.get("pattern", ""):

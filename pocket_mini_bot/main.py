@@ -154,14 +154,14 @@ class MiniBot(QWidget):
         ])
         root.addWidget(self.time_mode)
 
-        # Interval Selector
+        # Fast Sampling Interval Selector (1s, 2s, 3s, 5s)
         self.interval = QComboBox()
         self.interval.setObjectName("comboInput")
         self.interval.addItems([
-            "🔄 Análisis: Cada 5 segundos",
-            "🔄 Análisis: Cada 10 segundos",
-            "🔄 Análisis: Cada 15 segundos",
-            "🔄 Análisis: Cada 30 segundos"
+            "⚡ Confirmación: 1 seg (Ultra rápido)",
+            "⚡ Confirmación: 2 seg (Rápido)",
+            "🔄 Confirmación: 3 seg",
+            "🔄 Confirmación: 5 seg"
         ])
         root.addWidget(self.interval)
 
@@ -474,7 +474,7 @@ class MiniBot(QWidget):
             else:
                 self.pick_region()
                 return
-        intervals = [5, 10, 15, 30]
+        intervals = [1, 2, 3, 5]
         seconds = intervals[self.interval.currentIndex()]
         self.timer.start(seconds * 1000)
         self.start_btn.setText("⏸ Pausar")
@@ -526,6 +526,9 @@ class MiniBot(QWidget):
                 duration_sec = result.get("duration_seconds", 60)
 
             if sig in ("CALL", "PUT"):
+                if getattr(self, "_last_sig", "") != sig:
+                    QApplication.beep()
+                    self._last_sig = sig
                 self.exp_badge.setText(f"⏱️ Tiempo: {duration_label}")
                 self.time_val.setText(duration_label)
                 # Restart countdown
