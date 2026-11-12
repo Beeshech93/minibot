@@ -15,7 +15,7 @@ class MiniBot(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Pocket Mini Bot")
-        self.setFixedSize(340, 520)
+        self.setFixedSize(340, 570)
         self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
         self.region = None
         self.last_result = None
@@ -112,6 +112,32 @@ class MiniBot(QWidget):
         self.info_banner.setObjectName("infoBanner")
         self.info_banner.setWordWrap(True)
         root.addWidget(self.info_banner)
+
+        # Multi-Agent Intelligence Status Panel
+        self.agents_frame = QFrame()
+        self.agents_frame.setObjectName("agentsFrame")
+        agents_layout = QVBoxLayout(self.agents_frame)
+        agents_layout.setContentsMargins(10, 8, 10, 8)
+        agents_layout.setSpacing(3)
+
+        agents_header = QLabel("🤖 Consenso de Agentes IA (4 especialistas)")
+        agents_header.setObjectName("agentsHeader")
+        agents_layout.addWidget(agents_header)
+
+        self.agent_pa = QLabel("• Acción del Precio: Esperando datos")
+        self.agent_pa.setObjectName("agentRow")
+        self.agent_st = QLabel("• Estructura S/R: Mapeando niveles")
+        self.agent_st.setObjectName("agentRow")
+        self.agent_ind = QLabel("• Indicadores & EMA: Calculando")
+        self.agent_ind.setObjectName("agentRow")
+        self.agent_mom = QLabel("• Volumen & Flujo: Monitoreando")
+        self.agent_mom.setObjectName("agentRow")
+
+        agents_layout.addWidget(self.agent_pa)
+        agents_layout.addWidget(self.agent_st)
+        agents_layout.addWidget(self.agent_ind)
+        agents_layout.addWidget(self.agent_mom)
+        root.addWidget(self.agents_frame)
 
         # Timeframe mode selector (Auto vs Fixed 1m, 2m, 3m, 5m)
         self.time_mode = QComboBox()
@@ -335,6 +361,21 @@ class MiniBot(QWidget):
                 background: #312e81;
                 color: #e0e7ff;
             }
+            QFrame#agentsFrame {
+                background: #111722;
+                border: 1px solid #1e293b;
+                border-radius: 8px;
+            }
+            QLabel#agentsHeader {
+                font-size: 10px;
+                font-weight: 700;
+                color: #818cf8;
+                letter-spacing: 0.5px;
+            }
+            QLabel#agentRow {
+                font-size: 10px;
+                color: #94a3b8;
+            }
             QLabel#footerText {
                 font-size: 10px;
                 color: #475569;
@@ -503,10 +544,31 @@ class MiniBot(QWidget):
             self.candles_val.setText(str(result["count"]))
 
             self.info_banner.setText(result["explanation"])
+            if "agents" in result:
+                self.update_agent_display(result["agents"])
             self.footer.setText(f"Actualizado: {result['time']}")
         except Exception as exc:
             self.status.setText("Alerta")
             self.info_banner.setText(f"Aviso de captura: {exc}")
+
+    def update_agent_display(self, agents_dict):
+        if not agents_dict:
+            return
+        pa = agents_dict.get("price_action", {})
+        st = agents_dict.get("structure", {})
+        ind = agents_dict.get("indicators", {})
+        mom = agents_dict.get("momentum", {})
+
+        def fmt(tag, d, key):
+            vote = d.get("vote", "—")
+            sub = d.get(key, d.get("reason", ""))
+            icon = "🟢" if vote == "CALL" else "🔴" if vote == "PUT" else "⚪"
+            return f"{icon} {tag}: {vote} ({sub[:28]})"
+
+        self.agent_pa.setText(fmt("Patrones", pa, "pattern"))
+        self.agent_st.setText(fmt("Estructura S/R", st, "zone"))
+        self.agent_ind.setText(fmt("Indicadores", ind, "reason"))
+        self.agent_mom.setText(fmt("Flujo/Volumen", mom, "state"))
 
     def simulate_demo(self):
         is_call = getattr(self, "_demo_toggle", False)
@@ -551,6 +613,17 @@ class MiniBot(QWidget):
         mins = self.remaining_seconds // 60
         secs = self.remaining_seconds % 60
         self.countdown_label.setText(f"⏳ Restante: {mins:02d}:{secs:02d}")
+
+        # Update Agent Display in Demo
+        pa_pat = "Martillo Alcista" if sig == "CALL" else "Estrella Fugaz"
+        st_zone = "Rebote en Soporte" if sig == "CALL" else "Rechazo en Resistencia"
+        ind_txt = "EMA9 > EMA21 > EMA50" if sig == "CALL" else "EMA9 < EMA21 < EMA50"
+        self.update_agent_display({
+            "price_action": {"vote": sig, "pattern": pa_pat},
+            "structure": {"vote": sig, "zone": st_zone},
+            "indicators": {"vote": sig, "reason": ind_txt},
+            "momentum": {"vote": sig, "state": "Intención Institucional"}
+        })
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

@@ -6,6 +6,11 @@ from PySide6.QtCore import Qt, QRect, Signal
 from PySide6.QtGui import QPainter, QColor, QPen
 from PySide6.QtWidgets import QWidget, QApplication
 
+try:
+    from ai_agents import extract_candles_from_data, ConsensusMasterAgent
+except ImportError:
+    from pocket_mini_bot.ai_agents import extract_candles_from_data, ConsensusMasterAgent
+
 def capture_region(rect):
     # Qt screen coordinates may differ on Retina; MSS uses physical pixels.
     mss_factory = getattr(mss, "MSS", None) or mss.mss
@@ -34,8 +39,8 @@ def analyze_chart(image):
     green = cv2.morphologyEx(green, cv2.MORPH_OPEN, kernel)
     red = cv2.morphologyEx(red, cv2.MORPH_OPEN, kernel)
 
-    # Aggregate colored pixels by x-column; use weighted vertical centers.
-    xs, centers, directions = [], [], []
+    # Aggregate colored pixels by x-column; extract centers and heights
+    xs, centers, directions, heights = [], [], [], []
     for x in range(0, w, max(1, w // 180)):
         gys = np.where(green[:, x] > 0)[0]
         rys = np.where(red[:, x] > 0)[0]
@@ -52,86 +57,30 @@ def analyze_chart(image):
         xs.append(x)
         centers.append(float(np.median(ys)))
         directions.append(direction)
+        heights.append(float(len(ys)))
 
     # De-duplicate neighboring x-columns into approximate candle observations.
-    candles = []
-    for x, y, d in zip(xs, centers, directions):
-        if not candles or x - candles[-1][0] > max(3, w // 100):
-            candles.append([x, y, d])
+    c_xs, c_centers, c_dirs, c_heights = [], [], [], []
+    for x, y, d, h_val in zip(xs, centers, directions, heights):
+        if not c_xs or x - c_xs[-1] > max(3, w // 100):
+            c_xs.append(x)
+            c_centers.append(y)
+            c_dirs.append(d)
+            c_heights.append(h_val)
         else:
-            old = candles[-1]
-            old[1] = (old[1] + y) / 2
-            old[2] = d
+            c_centers[-1] = (c_centers[-1] + y) / 2.0
+            c_dirs[-1] = d
+            c_heights[-1] = max(c_heights[-1], h_val)
 
-    if len(candles) < 8:
+    if len(c_xs) < 8:
         raise ValueError("No se detectaron suficientes cuerpos de velas. Selecciona solo el área del gráfico y verifica los colores.")
 
-    # Chart y-axis is inverted: smaller y means visually higher price.
-    prices = np.array([-c[1] for c in candles], dtype=float)
-    dirs = np.array([c[2] for c in candles], dtype=float)
-    delta = np.diff(prices)
-    gains = np.maximum(delta, 0)
-    losses = np.maximum(-delta, 0)
-    period = min(14, len(delta))
-    avg_gain = gains[-period:].mean() if period else 0
-    avg_loss = losses[-period:].mean() if period else 0
-    if avg_loss == 0:
-        rsi = 100.0 if avg_gain > 0 else 50.0
-    else:
-        rsi = 100 - (100 / (1 + avg_gain / avg_loss))
-
-    fast = np.mean(prices[-min(9, len(prices)):])
-    slow = np.mean(prices[-min(21, len(prices)):])
-    slope = prices[-1] - prices[max(0, len(prices)-6)]
-    if fast > slow and slope > 0:
-        trend = "ALCISTA"
-    elif fast < slow and slope < 0:
-        trend = "BAJISTA"
-    else:
-        trend = "LATERAL"
-
-    # Conservative signal: agreement of trend, momentum and non-extreme RSI.
-    bullish = trend == "ALCISTA" and dirs[-1] > 0 and rsi < 70
-    bearish = trend == "BAJISTA" and dirs[-1] < 0 and rsi > 30
-    if bullish:
-        signal = "CALL"
-        confidence = min(85, 55 + int(abs(fast - slow) / max(1, h) * 300) + int(max(0, 55-rsi) / 5))
-    elif bearish:
-        signal = "PUT"
-        confidence = min(85, 55 + int(abs(fast - slow) / max(1, h) * 300) + int(max(0, rsi-45) / 5))
-    else:
-        signal, confidence = "ESPERAR", 50
-
-    # Calculate recommended expiration timeframe based on momentum and volatility
-    volatility = float(np.std(delta)) if len(delta) > 0 else 1.0
-    diff_val = abs(fast - slow) / max(1.0, float(h))
-
-    if signal in ("CALL", "PUT"):
-        if diff_val > 0.05 or volatility > 12:
-            recommended_time = "1 MIN"
-            duration_seconds = 60
-        elif diff_val > 0.025 or volatility > 6:
-            recommended_time = "2 MIN"
-            duration_seconds = 120
-        else:
-            recommended_time = "5 MIN"
-            duration_seconds = 300
-    else:
-        recommended_time = "—"
-        duration_seconds = 0
-
-    explanation = (
-        f"Señal {signal} a {recommended_time}. Tendencia: {trend} | RSI: {rsi:.1f}. "
-        f"Cuerpos detectados: {len(candles)}."
-    )
-    return {
-        "signal": signal, "confidence": confidence, "rsi": round(rsi, 1),
-        "trend": trend, "count": len(candles),
-        "recommended_time": recommended_time,
-        "duration_seconds": duration_seconds,
-        "explanation": explanation,
-        "time": datetime.now().strftime("%H:%M:%S")
-    }
+    # Convert to structured candles and run Multi-Agent consensus evaluation
+    candles = extract_candles_from_data(c_xs, c_centers, c_dirs, c_heights)
+    master = ConsensusMasterAgent()
+    res = master.evaluate(candles)
+    res["time"] = datetime.now().strftime("%H:%M:%S")
+    return res
 
 class RegionPicker(QWidget):
     selected = Signal(object)

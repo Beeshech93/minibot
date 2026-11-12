@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Pocket Mini Bot — Web Edition</title>
+  <title>Pocket Mini Bot — Multi-Agent AI Edition</title>
   <style>
     * {
       box-sizing: border-box;
@@ -29,7 +29,7 @@
       padding: 16px;
       display: flex;
       flex-direction: column;
-      gap: 10px;
+      gap: 9px;
       box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
     }
     .header {
@@ -159,6 +159,27 @@
       color: #f1f5f9;
       margin-top: 2px;
     }
+    /* Multi-Agent Panel */
+    .agents-panel {
+      background: #111722;
+      border: 1px solid #1e293b;
+      border-radius: 8px;
+      padding: 8px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .agents-header {
+      font-size: 10px;
+      font-weight: 700;
+      color: #818cf8;
+      letter-spacing: 0.5px;
+      margin-bottom: 2px;
+    }
+    .agent-row {
+      font-size: 10px;
+      color: #94a3b8;
+    }
     /* Info Banner */
     .info-banner {
       background: #141b27;
@@ -273,9 +294,18 @@
       </div>
     </div>
 
+    <!-- Multi-Agent Intelligence Status Panel -->
+    <div class="agents-panel">
+      <div class="agents-header">🤖 Consenso de Agentes IA (4 especialistas)</div>
+      <div class="agent-row" id="agentPa">⚪ Patrones: Esperando datos</div>
+      <div class="agent-row" id="agentSt">⚪ Estructura S/R: Mapeando niveles</div>
+      <div class="agent-row" id="agentInd">⚪ Indicadores & EMA: Calculando</div>
+      <div class="agent-row" id="agentMom">⚪ Flujo/Volumen: Monitoreando</div>
+    </div>
+
     <!-- Info banner -->
     <div class="info-banner" id="infoBanner">
-      Haz clic en «Capturar Pestaña» para seleccionar la ventana de Pocket Option o usa «Probar Demo».
+      Haz clic en «Capturar Pestaña» para seleccionar Pocket Option o usa «Probar Demo».
     </div>
 
     <!-- Mode Selector -->
@@ -306,7 +336,7 @@
       <button class="demo-btn" id="demoBtn">🧪 Probar Demo</button>
     </div>
 
-    <div class="footer-text" id="footerText">Web Edition · Compatible con Vercel</div>
+    <div class="footer-text" id="footerText">Multi-Agent AI Edition · Vercel Ready</div>
   </div>
 
   <video id="screenVideo" autoplay playsinline></video>
@@ -340,6 +370,11 @@
     const infoBanner = document.getElementById('infoBanner');
     const footerText = document.getElementById('footerText');
 
+    const agentPa = document.getElementById('agentPa');
+    const agentSt = document.getElementById('agentSt');
+    const agentInd = document.getElementById('agentInd');
+    const agentMom = document.getElementById('agentMom');
+
     const timeMode = document.getElementById('timeMode');
     const intervalSelect = document.getElementById('intervalSelect');
     const captureBtn = document.getElementById('captureBtn');
@@ -353,19 +388,14 @@
         mediaStream = await navigator.mediaDevices.getDisplayMedia({ video: { cursor: "always" }, audio: false });
         video.srcObject = mediaStream;
         statusBadge.innerText = "Conectado";
-        infoBanner.innerText = "Pestaña capturada correctamente. Pulsa «Iniciar» para comenzar el análisis.";
+        infoBanner.innerText = "Pestaña capturada correctamente. Pulsa «Iniciar» para comenzar el análisis con Agentes IA.";
       } catch (err) {
-        infoBanner.innerText = "No se otorgó permiso de captura de pantalla: " + err.message;
+        infoBanner.innerText = "Permiso de pantalla denegado: " + err.message;
       }
     });
 
-    // Toggle loop
     startBtn.addEventListener('click', () => {
-      if (isRunning) {
-        stopAnalysis();
-      } else {
-        startAnalysis();
-      }
+      if (isRunning) stopAnalysis(); else startAnalysis();
     });
 
     function startAnalysis() {
@@ -390,6 +420,146 @@
 
     analyzeBtn.addEventListener('click', performAnalysis);
 
+    /* ==========================================================
+       MULTI-AGENT AI INTELLIGENCE ENGINE (CLIENT-SIDE)
+       ========================================================== */
+
+    function evaluateMultiAgentSystem(candles) {
+      if (candles.length < 8) return null;
+
+      const prices = candles.map(c => c.close);
+      const highs = candles.map(c => c.high);
+      const lows = candles.map(c => c.low);
+      const currentPrice = prices[prices.length - 1];
+
+      // AGENT 1: Price Action & Candlestick Patterns
+      const last = candles[candles.length - 1];
+      const prev = candles[candles.length - 2];
+      let paVote = "ESPERAR", paConf = 50, paDetail = "Sin patrón claro";
+
+      const isHammer = last.lowerWick >= last.bodySize * 1.5 && last.upperWick <= last.bodySize * 0.8;
+      const isShootingStar = last.upperWick >= last.bodySize * 1.5 && last.lowerWick <= last.bodySize * 0.8;
+      const isBullEngulf = prev.color === -1 && last.color === 1 && last.close >= prev.open && last.bodySize > prev.bodySize * 1.1;
+      const isBearEngulf = prev.color === 1 && last.color === -1 && last.close <= prev.open && last.bodySize > prev.bodySize * 1.1;
+
+      if (isHammer) { paVote = "CALL"; paConf = 86; paDetail = "Martillo Alcista"; }
+      else if (isBullEngulf) { paVote = "CALL"; paConf = 88; paDetail = "Envolvente Alcista"; }
+      else if (isShootingStar) { paVote = "PUT"; paConf = 86; paDetail = "Estrella Fugaz"; }
+      else if (isBearEngulf) { paVote = "PUT"; paConf = 88; paDetail = "Envolvente Bajista"; }
+      else if (last.color === 1 && prev.color === 1) { paVote = "CALL"; paConf = 73; paDetail = "Impulso Verde"; }
+      else if (last.color === -1 && prev.color === -1) { paVote = "PUT"; paConf = 73; paDetail = "Impulso Rojo"; }
+
+      // AGENT 2: Market Structure (Support & Resistance)
+      const maxH = Math.max(...highs);
+      const minL = Math.min(...lows);
+      const range = maxH - minL;
+      let stVote = "ESPERAR", stConf = 55, stDetail = "Zona Media", blockCall = false, blockPut = false;
+
+      const distRes = Math.abs(maxH - currentPrice) / Math.max(1, range);
+      const distSup = Math.abs(currentPrice - minL) / Math.max(1, range);
+
+      if (distSup < 0.08 && last.color === 1) {
+        stVote = "CALL"; stConf = 85; stDetail = "Rebote en Soporte";
+      } else if (distRes < 0.08 && last.color === -1) {
+        stVote = "PUT"; stConf = 85; stDetail = "Rechazo en Resistencia";
+      } else if (currentPrice >= maxH * 0.998) {
+        stVote = "CALL"; stConf = 83; stDetail = "Ruptura de Resistencia";
+      } else if (distRes < 0.03) {
+        blockCall = true; stDetail = "Peligro: Techo Próximo";
+      } else if (distSup < 0.03) {
+        blockPut = true; stDetail = "Peligro: Piso Próximo";
+      }
+
+      // AGENT 3: Technical Indicators (EMAs & RSI)
+      function calcEma(series, period) {
+        const k = 2 / (period + 1);
+        let ema = series[0];
+        for (let i = 1; i < series.length; i++) ema = series[i] * k + ema * (1 - k);
+        return ema;
+      }
+      const ema9 = calcEma(prices, 9);
+      const ema21 = calcEma(prices, 21);
+      const ema50 = calcEma(prices, Math.min(50, prices.length));
+
+      let gains = 0, losses = 0;
+      for (let i = 1; i < prices.length; i++) {
+        const diff = prices[i] - prices[i - 1];
+        if (diff > 0) gains += diff; else losses -= diff;
+      }
+      const rsi = losses === 0 ? 100 : Math.round(100 - (100 / (1 + (gains / Math.max(1, losses)))));
+
+      let indVote = "ESPERAR", indConf = 50, indDetail = `RSI ${rsi}`;
+      if (ema9 > ema21 && ema21 > ema50 && rsi < 68) {
+        indVote = "CALL"; indConf = 82; indDetail = `EMA9>21>50 (RSI ${rsi})`;
+      } else if (ema9 < ema21 && ema21 < ema50 && rsi > 32) {
+        indVote = "PUT"; indConf = 82; indDetail = `EMA9<21<50 (RSI ${rsi})`;
+      } else if (rsi < 28) {
+        indVote = "CALL"; indConf = 77; indDetail = `Sobreventa (RSI ${rsi})`;
+      } else if (rsi > 72) {
+        indVote = "PUT"; indConf = 77; indDetail = `Sobrecompra (RSI ${rsi})`;
+      }
+
+      // AGENT 4: Order Flow & Momentum
+      const avgBody = candles.reduce((acc, c) => acc + c.bodySize, 0) / candles.length;
+      let momVote = "ESPERAR", momConf = 50, momDetail = "Volumen Estable";
+
+      if (last.bodySize > avgBody * 1.3 && last.color === prev.color) {
+        momVote = last.color === 1 ? "CALL" : "PUT";
+        momConf = 80;
+        momDetail = "Volumen Expansivo";
+      } else if (last.bodySize < avgBody * 0.4 && prev.bodySize > avgBody * 1.2) {
+        momVote = prev.color === 1 ? "PUT" : "CALL";
+        momConf = 74;
+        momDetail = "Agotamiento";
+      }
+
+      // MASTER CONSENSUS ENGINE (Weighted voting & Risk Filter)
+      let callScore = (paVote === "CALL" ? paConf * 0.3 : 0) +
+                      (stVote === "CALL" ? stConf * 0.3 : 0) +
+                      (indVote === "CALL" ? indConf * 0.25 : 0) +
+                      (momVote === "CALL" ? momConf * 0.15 : 0);
+
+      let putScore = (paVote === "PUT" ? paConf * 0.3 : 0) +
+                     (stVote === "PUT" ? stConf * 0.3 : 0) +
+                     (indVote === "PUT" ? indConf * 0.25 : 0) +
+                     (momVote === "PUT" ? momConf * 0.15 : 0);
+
+      if (blockCall) callScore *= 0.4;
+      if (blockPut) putScore *= 0.4;
+
+      let finalSig = "ESPERAR", finalConf = 50, finalDurLabel = "1 MIN", finalDurSec = 60;
+
+      if (callScore >= 72 && callScore > putScore + 10) {
+        finalSig = "CALL";
+        finalConf = Math.min(94, Math.round(callScore));
+        if (paVote === "CALL" && isHammer) { finalDurLabel = "1 MIN"; finalDurSec = 60; }
+        else if (stDetail.includes("Ruptura")) { finalDurLabel = "3 MIN"; finalDurSec = 180; }
+        else { finalDurLabel = "2 MIN"; finalDurSec = 120; }
+      } else if (putScore >= 72 && putScore > callScore + 10) {
+        finalSig = "PUT";
+        finalConf = Math.min(94, Math.round(putScore));
+        if (paVote === "PUT" && isShootingStar) { finalDurLabel = "1 MIN"; finalDurSec = 60; }
+        else if (stDetail.includes("Ruptura")) { finalDurLabel = "3 MIN"; finalDurSec = 180; }
+        else { finalDurLabel = "2 MIN"; finalDurSec = 120; }
+      }
+
+      return {
+        signal: finalSig,
+        confidence: finalConf,
+        recommendedTime: finalDurLabel,
+        durationSeconds: finalDurSec,
+        rsi: rsi,
+        trend: callScore > putScore ? "Alcista" : putScore > callScore ? "Bajista" : "Lateral",
+        count: candles.length,
+        agents: {
+          pa: { vote: paVote, detail: paDetail },
+          st: { vote: stVote, detail: stDetail },
+          ind: { vote: indVote, detail: indDetail },
+          mom: { vote: momVote, detail: momDetail }
+        }
+      };
+    }
+
     function performAnalysis() {
       if (!video.videoWidth || !video.videoHeight) return;
       canvas.width = video.videoWidth;
@@ -401,73 +571,65 @@
       const w = canvas.width;
       const h = canvas.height;
 
-      let greenCount = 0;
-      let redCount = 0;
       let candles = [];
-
       for (let x = 0; x < w; x += Math.max(2, Math.floor(w / 120))) {
-        let gY = [];
-        let rY = [];
+        let gY = [], rY = [];
         for (let y = 0; y < h; y += 2) {
           const idx = (y * w + x) * 4;
-          const r = data[idx];
-          const g = data[idx + 1];
-          const b = data[idx + 2];
+          const r = data[idx], g = data[idx + 1], b = data[idx + 2];
           if (g > 100 && g > r * 1.25 && g > b * 1.25) gY.push(y);
           if (r > 100 && r > g * 1.3 && r > b * 1.3) rY.push(y);
         }
-        if (gY.length > 5 && gY.length > rY.length * 1.2) {
-          candles.push({ y: gY[Math.floor(gY.length / 2)], dir: 1 });
-        } else if (rY.length > 5 && rY.length > gY.length * 1.2) {
-          candles.push({ y: rY[Math.floor(rY.length / 2)], dir: -1 });
+        if (gY.length >= 5 && gY.length > rY.length * 1.2) {
+          const bodyH = gY[gY.length - 1] - gY[0];
+          const cY = -gY[Math.floor(gY.length / 2)];
+          candles.push({
+            open: cY - bodyH / 2, close: cY + bodyH / 2,
+            high: cY + bodyH / 2 + 2, low: cY - bodyH / 2 - 2,
+            color: 1, bodySize: Math.max(2, bodyH),
+            upperWick: 2, lowerWick: 2
+          });
+        } else if (rY.length >= 5 && rY.length > gY.length * 1.2) {
+          const bodyH = rY[rY.length - 1] - rY[0];
+          const cY = -rY[Math.floor(rY.length / 2)];
+          candles.push({
+            open: cY + bodyH / 2, close: cY - bodyH / 2,
+            high: cY + bodyH / 2 + 2, low: cY - bodyH / 2 - 2,
+            color: -1, bodySize: Math.max(2, bodyH),
+            upperWick: 2, lowerWick: 2
+          });
         }
       }
 
-      if (candles.length < 5) {
-        infoBanner.innerText = "Pocas velas detectadas. Ajusta el zoom o enfoque en Pocket Option.";
+      if (candles.length < 8) {
+        infoBanner.innerText = "Pocas velas detectadas. Ajusta el zoom del gráfico en Pocket Option.";
         return;
       }
 
-      const prices = candles.map(c => -c.y);
-      let gains = 0, losses = 0;
-      for (let i = 1; i < prices.length; i++) {
-        const diff = prices[i] - prices[i - 1];
-        if (diff > 0) gains += diff; else losses -= diff;
-      }
-      const rsi = losses === 0 ? 100 : Math.round(100 - (100 / (1 + (gains / Math.max(1, losses)))));
-      const fast = prices.slice(-5).reduce((a, b) => a + b, 0) / 5;
-      const slow = prices.slice(-12).reduce((a, b) => a + b, 0) / Math.min(12, prices.length);
-      const trend = fast > slow ? "Alcista" : fast < slow ? "Bajista" : "Lateral";
+      const evalRes = evaluateMultiAgentSystem(candles);
+      if (!evalRes) return;
 
-      let sig = "ESPERAR";
-      if (trend === "Alcista" && candles[candles.length - 1].dir > 0 && rsi < 70) sig = "CALL";
-      else if (trend === "Bajista" && candles[candles.length - 1].dir < 0 && rsi > 30) sig = "PUT";
-
-      const conf = sig === "ESPERAR" ? 50 : Math.min(88, 60 + Math.abs(rsi - 50));
-      let durSec = 60;
-      let durLabel = "1 MIN";
+      let durLabel = evalRes.recommendedTime;
+      let durSec = evalRes.durationSeconds;
       if (timeMode.value !== "auto") {
         durSec = parseInt(timeMode.value, 10);
         durLabel = (durSec / 60) + " MIN";
-      } else {
-        durLabel = Math.abs(fast - slow) > 8 ? "1 MIN" : "2 MIN";
-        durSec = durLabel === "1 MIN" ? 60 : 120;
       }
 
-      applySignal(sig, conf, durLabel, durSec, rsi, trend, candles.length);
+      applySignal(evalRes.signal, evalRes.confidence, durLabel, durSec, evalRes.rsi, evalRes.trend, evalRes.count, evalRes.agents);
+      infoBanner.innerText = `Consenso IA: ${evalRes.signal} (${evalRes.confidence}%). Tendencia ${evalRes.trend.toLowerCase()} confirmada por agentes.`;
     }
 
-    // Demo Mode
+    // Demo Simulation
     demoBtn.addEventListener('click', () => {
       demoToggle = !demoToggle;
       const sig = demoToggle ? "CALL" : "PUT";
-      const conf = Math.floor(Math.random() * 11) + 78;
-      const rsi = sig === "CALL" ? (Math.random() * 12 + 34).toFixed(1) : (Math.random() * 12 + 63).toFixed(1);
+      const conf = Math.floor(Math.random() * 10) + 80;
+      const rsi = sig === "CALL" ? (Math.random() * 12 + 35).toFixed(1) : (Math.random() * 12 + 63).toFixed(1);
       const trend = sig === "CALL" ? "Alcista" : "Bajista";
-      const candles = Math.floor(Math.random() * 14) + 20;
+      const candles = Math.floor(Math.random() * 14) + 22;
 
-      let durSec = 60;
-      let durLabel = "1 MIN";
+      let durSec = 60, durLabel = "1 MIN";
       if (timeMode.value !== "auto") {
         durSec = parseInt(timeMode.value, 10);
         durLabel = (durSec / 60) + " MIN";
@@ -478,12 +640,19 @@
         durSec = pick[1];
       }
 
-      applySignal(sig, conf, durLabel, durSec, rsi, trend, candles);
+      const mockAgents = {
+        pa: { vote: sig, detail: sig === "CALL" ? "Martillo Alcista" : "Estrella Fugaz" },
+        st: { vote: sig, detail: sig === "CALL" ? "Rebote en Soporte" : "Rechazo en Resistencia" },
+        ind: { vote: sig, detail: sig === "CALL" ? "EMA9 > 21 > 50" : "EMA9 < 21 < 50" },
+        mom: { vote: sig, detail: "Volumen Expansivo" }
+      };
+
+      applySignal(sig, conf, durLabel, durSec, rsi, trend, candles, mockAgents);
       statusBadge.innerText = "Modo Demo";
-      infoBanner.innerText = `Prueba simulada: Señal ${sig} para ${durLabel} con tendencia ${trend.toLowerCase()}.`;
+      infoBanner.innerText = `Simulación Multi-Agente: Señal ${sig} a ${durLabel} con 4 agentes alineados.`;
     });
 
-    function applySignal(sig, conf, durLabel, durSec, rsi, trend, count) {
+    function applySignal(sig, conf, durLabel, durSec, rsi, trend, count, agents) {
       signalText.innerText = sig;
       confidenceText.innerText = `Confianza: ${conf}%`;
       rsiVal.innerText = rsi;
@@ -503,6 +672,18 @@
         progressFill.style.width = "0%";
         clearInterval(countdownInterval);
       }
+
+      if (agents) {
+        function fmt(tag, a) {
+          const icon = a.vote === "CALL" ? "🟢" : a.vote === "PUT" ? "🔴" : "⚪";
+          return `${icon} ${tag}: ${a.vote} (${a.detail.substring(0, 24)})`;
+        }
+        agentPa.innerText = fmt("Patrones", agents.pa);
+        agentSt.innerText = fmt("Estructura S/R", agents.st);
+        agentInd.innerText = fmt("Indicadores", agents.ind);
+        agentMom.innerText = fmt("Momentum", agents.mom);
+      }
+
       footerText.innerText = "Actualizado: " + new Date().toLocaleTimeString();
     }
 
