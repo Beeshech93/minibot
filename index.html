@@ -119,6 +119,40 @@
       overflow: hidden;
       margin-top: 4px;
     }
+    .alert-badge {
+      background: #0f172a;
+      color: #94a3b8;
+      border: 1px solid #1e293b;
+      border-radius: 6px;
+      padding: 4px 8px;
+      font-size: 11px;
+      font-weight: 700;
+      text-align: center;
+      margin-top: 4px;
+      transition: all 0.2s ease;
+    }
+    .alert-5s-active {
+      background: #dc2626 !important;
+      color: #ffffff !important;
+      border-color: #ef4444 !important;
+      box-shadow: 0 0 10px rgba(239, 68, 68, 0.6);
+      font-size: 12px !important;
+      font-weight: 900 !important;
+      animation: pulse-alert 0.6s infinite alternate;
+    }
+    .alert-entry-now {
+      background: #059669 !important;
+      color: #ffffff !important;
+      border-color: #10b981 !important;
+      box-shadow: 0 0 12px rgba(16, 185, 129, 0.7);
+      font-size: 13px !important;
+      font-weight: 900 !important;
+      animation: pulse-alert 0.4s infinite alternate;
+    }
+    @keyframes pulse-alert {
+      from { transform: scale(1); }
+      to { transform: scale(1.025); }
+    }
     .progress-bar-fill {
       width: 0%;
       height: 100%;
@@ -319,6 +353,7 @@
         <div class="badge" id="expBadge">⏱️ Tiempo: —</div>
         <div class="badge" id="countdownBadge">⏳ Restante: —</div>
       </div>
+      <div class="alert-badge" id="alertBadge">⏳ Formando vela... Alerta activa a los :55s</div>
       <div class="progress-bar-bg">
         <div class="progress-bar-fill" id="progressFill"></div>
       </div>
@@ -434,6 +469,7 @@
     const detectedCount = document.getElementById('detectedCount');
     const zoneSelect = document.getElementById('zoneSelect');
     const cropStatus = document.getElementById('cropStatus');
+    const alertBadge = document.getElementById('alertBadge');
 
     zoneSelect.addEventListener('change', () => {
       cropStatus.innerText = zoneSelect.value === 'auto' ? 'Recorte Pocket Option' :
@@ -1093,6 +1129,59 @@
       countdownBadge.innerText = `⏳ Restante: ${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
       const pct = (remainingSeconds / totalSeconds) * 100;
       progressFill.style.width = pct + "%";
+    }
+
+    // RELOJ SINCRONIZADO DE VELA (ALERTA EN LOS ÚLTIMOS 5 SEGUNDOS)
+    let candleClockInterval = setInterval(updateCandleClock, 1000);
+    let lastAlertSec = -1;
+
+    function updateCandleClock() {
+      const now = new Date();
+      const sec = now.getSeconds();
+      const min = now.getMinutes();
+
+      let tfSec = 60;
+      if (timeMode.value === "60") tfSec = 60;
+      else if (timeMode.value === "120") tfSec = 120;
+      else if (timeMode.value === "180") tfSec = 180;
+      else if (timeMode.value === "300") tfSec = 300;
+
+      const currentSecInTf = (min * 60 + sec) % tfSec;
+      let secsLeft = tfSec - currentSecInTf;
+      if (secsLeft === tfSec) secsLeft = 0;
+
+      const pct = Math.round(((tfSec - secsLeft) / tfSec) * 100);
+      progressFill.style.width = pct + "%";
+
+      const currentSig = signalText.innerText;
+
+      // VENTANA DE ALERTA DE LOS ÚLTIMOS 5 SEGUNDOS (5, 4, 3, 2, 1)
+      if (secsLeft >= 1 && secsLeft <= 5) {
+        if (mediaStream && isRunning) performAnalysis();
+
+        alertBadge.innerText = `🚨 ¡ALERTA EN ${secsLeft}s! ENTRAR EN: ${currentSig}`;
+        alertBadge.className = "alert-badge alert-5s-active";
+        countdownBadge.innerText = `⏱️ Cierra: ${secsLeft}s`;
+        expBadge.innerText = `⏱️ Tiempo: 1 VELA`;
+
+        if (lastAlertSec !== sec) {
+          playBeep(720, 0.12);
+          lastAlertSec = sec;
+        }
+      } else if (secsLeft === 0) {
+        alertBadge.innerText = `🎯 ¡ENTRA AHORA EN LA NUEVA VELA! (${currentSig})`;
+        alertBadge.className = "alert-badge alert-entry-now";
+        countdownBadge.innerText = `🎯 ¡00s AHORA!`;
+
+        if (lastAlertSec !== sec) {
+          playBeep(1200, 0.28);
+          lastAlertSec = sec;
+        }
+      } else {
+        alertBadge.innerText = `⏳ Formando vela... Alerta activa a los :55s`;
+        alertBadge.className = "alert-badge";
+        countdownBadge.innerText = `⏳ Cierra en: ${secsLeft}s`;
+      }
     }
   </script>
 </body>

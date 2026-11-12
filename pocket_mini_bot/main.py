@@ -31,6 +31,13 @@ class MiniBot(QWidget):
         self.total_seconds = 0
         self.remaining_seconds = 0
 
+        # Wall-clock candle synchronizer timer (1s interval)
+        self.clock_timer = QTimer(self)
+        self.clock_timer.setInterval(1000)
+        self.clock_timer.timeout.connect(self.tick_candle_clock)
+        self.clock_timer.start()
+        self._current_sig = "ESPERAR"
+
         # Main Layout
         root = QVBoxLayout(self)
         root.setContentsMargins(14, 14, 14, 14)
@@ -87,6 +94,12 @@ class MiniBot(QWidget):
         time_row.addWidget(self.exp_badge)
         time_row.addWidget(self.countdown_label)
         card_layout.addLayout(time_row)
+
+        # Alert Badge for Last 5 Seconds
+        self.alert_badge = QLabel("⏳ Formando vela... Alerta activa a los :55s")
+        self.alert_badge.setObjectName("alertBadge")
+        self.alert_badge.setAlignment(Qt.AlignCenter)
+        card_layout.addWidget(self.alert_badge)
 
         # Progress bar for signal expiration
         self.progress_bar = QProgressBar()
@@ -523,6 +536,58 @@ class MiniBot(QWidget):
         self.status.setText("EN VIVO")
         self.analyze()
 
+    def tick_candle_clock(self):
+        now = datetime.now()
+        sec = now.second
+        min_val = now.minute
+
+        mode_idx = self.time_mode.currentIndex()
+        if mode_idx == 1:   # 1 MIN (M1)
+            tf_sec = 60
+            secs_left = 60 - sec
+        elif mode_idx == 2: # 2 MIN (M2)
+            tf_sec = 120
+            secs_left = 120 - ((min_val % 2) * 60 + sec)
+        elif mode_idx == 3: # 3 MIN (M3)
+            tf_sec = 180
+            secs_left = 180 - ((min_val % 3) * 60 + sec)
+        elif mode_idx == 4: # 5 MIN (M5)
+            tf_sec = 300
+            secs_left = 300 - ((min_val % 5) * 60 + sec)
+        else:
+            tf_sec = 60
+            secs_left = 60 - sec
+
+        if secs_left == tf_sec:
+            secs_left = 0
+
+        pct = int(((tf_sec - secs_left) / tf_sec) * 100) if tf_sec > 0 else 0
+        self.progress_bar.setValue(pct)
+
+        # LAST 5 SECONDS TRIGGER WINDOW (5, 4, 3, 2, 1)
+        if 1 <= secs_left <= 5:
+            if self.region and self.timer.isActive():
+                self.analyze()
+
+            sig = getattr(self, "_current_sig", "ESPERAR")
+            self.alert_badge.setText(f"🚨 ¡ALERTA EN {secs_left}s! ENTRAR EN: {sig}")
+            self.alert_badge.setStyleSheet("background: #dc2626; color: #ffffff; font-weight: 800; border-radius: 6px; padding: 4px; font-size: 11px;")
+            self.countdown_label.setText(f"⏱️ Fin vela: {secs_left}s")
+            self.countdown_label.setStyleSheet("background: #450a0a; color: #fca5a5; border: 1px solid #ef4444; border-radius: 6px; padding: 4px; font-size: 11px; font-weight: 800;")
+            QApplication.beep()
+        elif secs_left == 0:
+            sig = getattr(self, "_current_sig", "ESPERAR")
+            self.alert_badge.setText(f"🎯 ¡ENTRA AHORA EN LA NUEVA VELA! ({sig})")
+            self.alert_badge.setStyleSheet("background: #059669; color: #ffffff; font-weight: 900; border-radius: 6px; padding: 4px; font-size: 11px;")
+            self.countdown_label.setText("🎯 ¡00s AHORA!")
+            self.countdown_label.setStyleSheet("background: #022c22; color: #6ee7b7; border: 1px solid #10b981; border-radius: 6px; padding: 4px; font-size: 11px; font-weight: 800;")
+            QApplication.beep()
+        else:
+            self.countdown_label.setText(f"⏳ Cierra en: {secs_left}s")
+            self.countdown_label.setStyleSheet("background: #0f172a; color: #cbd5e1; border: 1px solid #1e293b; border-radius: 6px; padding: 4px 8px; font-size: 11px; font-weight: 600;")
+            self.alert_badge.setText(f"⏳ Formando vela... Alerta activa a los :55s")
+            self.alert_badge.setStyleSheet("background: #0f172a; color: #94a3b8; border: 1px solid #1e293b; border-radius: 6px; padding: 3px 6px; font-size: 10px; font-weight: 600;")
+
     def tick_countdown(self):
         if self.remaining_seconds > 0:
             self.remaining_seconds -= 1
@@ -552,10 +617,13 @@ class MiniBot(QWidget):
             sig = result["signal"]
             if sig == "CALL":
                 self.signal.setText("SUBIR (CALL)")
+                self._current_sig = "SUBIR (CALL)"
             elif sig == "PUT":
                 self.signal.setText("BAJAR (PUT)")
+                self._current_sig = "BAJAR (PUT)"
             else:
                 self.signal.setText("ESPERAR")
+                self._current_sig = "ESPERAR"
 
             prob_call = result.get("prob_call", 50.0)
             prob_put = result.get("prob_put", 50.0)
