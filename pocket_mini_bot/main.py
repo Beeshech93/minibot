@@ -165,32 +165,23 @@ class MiniBot(QWidget):
         # Action Buttons
         btn_row = QHBoxLayout()
         btn_row.setSpacing(8)
-        self.pick_btn = QPushButton("🎯 Seleccionar")
+        self.pick_btn = QPushButton("🎯 Seleccionar área")
         self.pick_btn.setObjectName("secondaryBtn")
         self.pick_btn.clicked.connect(self.pick_region)
-        self.start_btn = QPushButton("▶ Iniciar")
+        self.start_btn = QPushButton("▶ Iniciar En Vivo")
         self.start_btn.setObjectName("primaryBtn")
         self.start_btn.clicked.connect(self.toggle)
         btn_row.addWidget(self.pick_btn)
         btn_row.addWidget(self.start_btn)
         root.addLayout(btn_row)
 
-        sub_row = QHBoxLayout()
-        sub_row.setSpacing(8)
-        self.once_btn = QPushButton("⚡ Analizar")
+        self.once_btn = QPushButton("⚡ Analizar ahora")
         self.once_btn.setObjectName("subtleBtn")
         self.once_btn.clicked.connect(self.analyze)
-
-        self.demo_btn = QPushButton("🧪 Probar Demo")
-        self.demo_btn.setObjectName("demoBtn")
-        self.demo_btn.clicked.connect(self.simulate_demo)
-
-        sub_row.addWidget(self.once_btn)
-        sub_row.addWidget(self.demo_btn)
-        root.addLayout(sub_row)
+        root.addWidget(self.once_btn)
 
         # Footer timestamp
-        self.footer = QLabel("Sin capturas registradas")
+        self.footer = QLabel("Modo En Vivo · Conectado a pantalla")
         self.footer.setObjectName("footerText")
         self.footer.setAlignment(Qt.AlignCenter)
         root.addWidget(self.footer)
@@ -464,17 +455,27 @@ class MiniBot(QWidget):
         if self.timer.isActive():
             self.timer.stop()
             self.countdown_timer.stop()
-            self.start_btn.setText("▶ Iniciar")
+            self.start_btn.setText("▶ Iniciar En Vivo")
             self.status.setText("Pausado")
             return
         if not self.region:
-            QMessageBox.information(self, "Seleccionar gráfico", "Pulsa «🎯 Seleccionar» y marca la zona de velas.")
-            return
+            screen = QApplication.primaryScreen()
+            if screen:
+                geom = screen.geometry()
+                w = int(geom.width() * 0.75)
+                h = int(geom.height() * 0.70)
+                x = int((geom.width() - w) / 2)
+                y = int((geom.height() - h) / 2)
+                self.region = QRect(x, y, w, h)
+                self.info_banner.setText(f"Área automática configurada ({w}x{h} px). Analizando pantalla en vivo.")
+            else:
+                self.pick_region()
+                return
         intervals = [5, 10, 15, 30]
         seconds = intervals[self.interval.currentIndex()]
         self.timer.start(seconds * 1000)
         self.start_btn.setText("⏸ Pausar")
-        self.status.setText("En vivo")
+        self.status.setText("EN VIVO")
         self.analyze()
 
     def tick_countdown(self):
@@ -569,61 +570,6 @@ class MiniBot(QWidget):
         self.agent_st.setText(fmt("Estructura S/R", st, "zone"))
         self.agent_ind.setText(fmt("Indicadores", ind, "reason"))
         self.agent_mom.setText(fmt("Flujo/Volumen", mom, "state"))
-
-    def simulate_demo(self):
-        is_call = getattr(self, "_demo_toggle", False)
-        self._demo_toggle = not is_call
-        sig = "CALL" if is_call else "PUT"
-        conf = random.randint(78, 88)
-        rsi = random.uniform(32.0, 44.0) if sig == "CALL" else random.uniform(62.0, 76.0)
-        trend = "Alcista" if sig == "CALL" else "Bajista"
-        candles = random.randint(22, 35)
-
-        mode_idx = self.time_mode.currentIndex()
-        if mode_idx == 1:
-            dur_label, dur_sec = "1 MIN", 60
-        elif mode_idx == 2:
-            dur_label, dur_sec = "2 MIN", 120
-        elif mode_idx == 3:
-            dur_label, dur_sec = "3 MIN", 180
-        elif mode_idx == 4:
-            dur_label, dur_sec = "5 MIN", 300
-        else:
-            dur_label, dur_sec = random.choice([("1 MIN", 60), ("2 MIN", 120), ("5 MIN", 300)])
-
-        self.signal.setText(sig)
-        self.confidence.setText(f"Confianza: {conf}%")
-        self.update_signal_style(sig)
-
-        self.exp_badge.setText(f"⏱️ Tiempo: {dur_label}")
-        self.time_val.setText(dur_label)
-        self.rsi_val.setText(f"{rsi:.1f}")
-        self.trend_val.setText(trend)
-        self.candles_val.setText(str(candles))
-
-        self.status.setText("Modo Demo")
-        self.info_banner.setText(f"Simulación de prueba: Señal {sig} a {dur_label} con tendencia {trend.lower()}.")
-        self.footer.setText(f"Prueba: {datetime.now().strftime('%H:%M:%S')}")
-
-        # Start countdown
-        self.total_seconds = dur_sec
-        self.remaining_seconds = dur_sec
-        self.progress_bar.setValue(100)
-        self.countdown_timer.start()
-        mins = self.remaining_seconds // 60
-        secs = self.remaining_seconds % 60
-        self.countdown_label.setText(f"⏳ Restante: {mins:02d}:{secs:02d}")
-
-        # Update Agent Display in Demo
-        pa_pat = "Martillo Alcista" if sig == "CALL" else "Estrella Fugaz"
-        st_zone = "Rebote en Soporte" if sig == "CALL" else "Rechazo en Resistencia"
-        ind_txt = "EMA9 > EMA21 > EMA50" if sig == "CALL" else "EMA9 < EMA21 < EMA50"
-        self.update_agent_display({
-            "price_action": {"vote": sig, "pattern": pa_pat},
-            "structure": {"vote": sig, "zone": st_zone},
-            "indicators": {"vote": sig, "reason": ind_txt},
-            "momentum": {"vote": sig, "state": "Intención Institucional"}
-        })
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

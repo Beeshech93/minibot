@@ -305,7 +305,7 @@
 
     <!-- Info banner -->
     <div class="info-banner" id="infoBanner">
-      Haz clic en «Capturar Pestaña» para seleccionar Pocket Option o usa «Probar Demo».
+      Haz clic en «🎯 Conectar Gráfico» para seleccionar la ventana de Pocket Option y comenzar el análisis en vivo.
     </div>
 
     <!-- Mode Selector -->
@@ -327,16 +327,15 @@
 
     <!-- Buttons -->
     <div class="btn-row">
-      <button class="secondary-btn" id="captureBtn">🎯 Capturar Pestaña</button>
-      <button class="primary-btn" id="startBtn">▶ Iniciar</button>
+      <button class="secondary-btn" id="captureBtn">🎯 Conectar Gráfico</button>
+      <button class="primary-btn" id="startBtn">▶ Iniciar En Vivo</button>
     </div>
 
     <div class="btn-row">
-      <button class="subtle-btn" id="analyzeBtn">⚡ Analizar</button>
-      <button class="demo-btn" id="demoBtn">🧪 Probar Demo</button>
+      <button class="subtle-btn" id="analyzeBtn" style="width:100%;">⚡ Analizar Ahora</button>
     </div>
 
-    <div class="footer-text" id="footerText">Multi-Agent AI Edition · Vercel Ready</div>
+    <div class="footer-text" id="footerText">Modo En Vivo · Conectado en Tiempo Real</div>
   </div>
 
   <video id="screenVideo" autoplay playsinline></video>
@@ -380,32 +379,39 @@
     const captureBtn = document.getElementById('captureBtn');
     const startBtn = document.getElementById('startBtn');
     const analyzeBtn = document.getElementById('analyzeBtn');
-    const demoBtn = document.getElementById('demoBtn');
 
-    // Screen Capture
-    captureBtn.addEventListener('click', async () => {
+    async function connectScreen() {
       try {
         mediaStream = await navigator.mediaDevices.getDisplayMedia({ video: { cursor: "always" }, audio: false });
         video.srcObject = mediaStream;
         statusBadge.innerText = "Conectado";
-        infoBanner.innerText = "Pestaña capturada correctamente. Pulsa «Iniciar» para comenzar el análisis con Agentes IA.";
+        infoBanner.innerText = "Pestaña de Pocket Option conectada. Analizando velas en tiempo real...";
+        return true;
       } catch (err) {
-        infoBanner.innerText = "Permiso de pantalla denegado: " + err.message;
+        infoBanner.innerText = "Permiso de pantalla no otorgado: " + err.message;
+        return false;
       }
-    });
+    }
 
-    startBtn.addEventListener('click', () => {
-      if (isRunning) stopAnalysis(); else startAnalysis();
+    captureBtn.addEventListener('click', connectScreen);
+
+    startBtn.addEventListener('click', async () => {
+      if (isRunning) {
+        stopAnalysis();
+      } else {
+        if (!mediaStream) {
+          const ok = await connectScreen();
+          if (!ok) return;
+        }
+        startAnalysis();
+      }
     });
 
     function startAnalysis() {
-      if (!mediaStream && !demoToggle) {
-        alert("Primero pulsa «🎯 Capturar Pestaña» o usa «🧪 Probar Demo».");
-        return;
-      }
+      if (!mediaStream) return;
       isRunning = true;
       startBtn.innerText = "⏸ Pausar";
-      statusBadge.innerText = "En vivo";
+      statusBadge.innerText = "EN VIVO";
       const intervalSec = parseInt(intervalSelect.value, 10);
       performAnalysis();
       analysisInterval = setInterval(performAnalysis, intervalSec * 1000);
@@ -413,12 +419,18 @@
 
     function stopAnalysis() {
       isRunning = false;
-      startBtn.innerText = "▶ Iniciar";
+      startBtn.innerText = "▶ Iniciar En Vivo";
       statusBadge.innerText = "Pausado";
       clearInterval(analysisInterval);
     }
 
-    analyzeBtn.addEventListener('click', performAnalysis);
+    analyzeBtn.addEventListener('click', async () => {
+      if (!mediaStream) {
+        const ok = await connectScreen();
+        if (!ok) return;
+      }
+      performAnalysis();
+    });
 
     /* ==========================================================
        MULTI-AGENT AI INTELLIGENCE ENGINE (CLIENT-SIDE)
@@ -619,38 +631,6 @@
       applySignal(evalRes.signal, evalRes.confidence, durLabel, durSec, evalRes.rsi, evalRes.trend, evalRes.count, evalRes.agents);
       infoBanner.innerText = `Consenso IA: ${evalRes.signal} (${evalRes.confidence}%). Tendencia ${evalRes.trend.toLowerCase()} confirmada por agentes.`;
     }
-
-    // Demo Simulation
-    demoBtn.addEventListener('click', () => {
-      demoToggle = !demoToggle;
-      const sig = demoToggle ? "CALL" : "PUT";
-      const conf = Math.floor(Math.random() * 10) + 80;
-      const rsi = sig === "CALL" ? (Math.random() * 12 + 35).toFixed(1) : (Math.random() * 12 + 63).toFixed(1);
-      const trend = sig === "CALL" ? "Alcista" : "Bajista";
-      const candles = Math.floor(Math.random() * 14) + 22;
-
-      let durSec = 60, durLabel = "1 MIN";
-      if (timeMode.value !== "auto") {
-        durSec = parseInt(timeMode.value, 10);
-        durLabel = (durSec / 60) + " MIN";
-      } else {
-        const opts = [["1 MIN", 60], ["2 MIN", 120], ["5 MIN", 300]];
-        const pick = opts[Math.floor(Math.random() * opts.length)];
-        durLabel = pick[0];
-        durSec = pick[1];
-      }
-
-      const mockAgents = {
-        pa: { vote: sig, detail: sig === "CALL" ? "Martillo Alcista" : "Estrella Fugaz" },
-        st: { vote: sig, detail: sig === "CALL" ? "Rebote en Soporte" : "Rechazo en Resistencia" },
-        ind: { vote: sig, detail: sig === "CALL" ? "EMA9 > 21 > 50" : "EMA9 < 21 < 50" },
-        mom: { vote: sig, detail: "Volumen Expansivo" }
-      };
-
-      applySignal(sig, conf, durLabel, durSec, rsi, trend, candles, mockAgents);
-      statusBadge.innerText = "Modo Demo";
-      infoBanner.innerText = `Simulación Multi-Agente: Señal ${sig} a ${durLabel} con 4 agentes alineados.`;
-    });
 
     function applySignal(sig, conf, durLabel, durSec, rsi, trend, count, agents) {
       signalText.innerText = sig;
