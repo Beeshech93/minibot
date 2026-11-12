@@ -57,17 +57,38 @@
       background: #161f2e;
       border: 1px solid #253347;
       border-radius: 12px;
-      padding: 14px;
+      padding: 12px 14px;
       text-align: center;
       display: flex;
       flex-direction: column;
-      gap: 6px;
+      gap: 5px;
       transition: all 0.3s ease;
     }
-    .signal-text {
-      font-size: 34px;
+    .next-candle-badge {
+      background: #0f172a;
+      color: #38bdf8;
+      border: 1px solid #1e293b;
+      border-radius: 8px;
+      padding: 4px 8px;
+      font-size: 11px;
       font-weight: 800;
-      letter-spacing: 1.5px;
+      letter-spacing: 0.5px;
+      text-align: center;
+    }
+    .signal-call .next-candle-badge {
+      background: #042f2e !important;
+      color: #6ee7b7 !important;
+      border-color: #10b981 !important;
+    }
+    .signal-put .next-candle-badge {
+      background: #2e0814 !important;
+      color: #fda4af !important;
+      border-color: #f43f5e !important;
+    }
+    .signal-text {
+      font-size: 30px;
+      font-weight: 800;
+      letter-spacing: 1.2px;
       color: #94a3b8;
     }
     .confidence-text {
@@ -263,6 +284,7 @@
 
     <!-- Signal Hero Card -->
     <div class="signal-card" id="signalCard">
+      <div class="next-candle-badge" id="nextCandleBadge">🔮 PRÓXIMA VELA: EVALUANDO</div>
       <div class="signal-text" id="signalText">ESPERAR</div>
       <div class="confidence-text" id="confidenceText">Confianza: —</div>
       <div class="time-row">
@@ -356,6 +378,7 @@
 
     const statusBadge = document.getElementById('statusBadge');
     const signalCard = document.getElementById('signalCard');
+    const nextCandleBadge = document.getElementById('nextCandleBadge');
     const signalText = document.getElementById('signalText');
     const confidenceText = document.getElementById('confidenceText');
     const expBadge = document.getElementById('expBadge');
@@ -437,7 +460,7 @@
        ========================================================== */
 
     function evaluateMultiAgentSystem(candles) {
-      if (candles.length < 8) return null;
+      if (candles.length < 4) return null;
 
       const prices = candles.map(c => c.close);
       const highs = candles.map(c => c.high);
@@ -600,30 +623,105 @@
       if (blockCall) { callNorm *= 0.35; callCount = Math.max(0, callCount - 1); }
       if (blockPut) { putNorm *= 0.35; putCount = Math.max(0, putCount - 1); }
 
-      let finalSig = "ESPERAR", finalConf = 50, finalDurLabel = "1 MIN", finalDurSec = 60;
+      // PREDICTOR PRÓXIMA VELA (SUBE / BAJA)
+      let nextCandleDir = "INDECISIÓN";
+      let nextCandleProb = 50;
+      let nextCandleReason = "Fuerzas equilibradas";
+      
+      const lastRange = Math.max(1, last.high - last.low);
+      const lowerRatio = last.lowerWick / lastRange;
+      const upperRatio = last.upperWick / lastRange;
+      const bodyRatio = last.bodySize / lastRange;
 
-      const hasPrimeCall = (paVote === "CALL" && paConf >= 84) || (trapVote === "CALL" && trapConf >= 86) || (bbVote === "CALL" && bbConf >= 85);
-      const hasPrimePut = (paVote === "PUT" && paConf >= 84) || (trapVote === "PUT" && trapConf >= 86) || (bbVote === "PUT" && bbConf >= 85);
+      let subeWeight = 0, bajaWeight = 0;
+      let subeReasons = [], bajaReasons = [];
 
-      const isFastCall = (hasPrimeCall && callCount >= 2 && callNorm >= 74 && putCount === 0);
-      const isStandardCall = (callCount >= 2 && callWeights >= 0.35 && callNorm >= 75 && putCount <= 1);
-
-      const isFastPut = (hasPrimePut && putCount >= 2 && putNorm >= 74 && callCount === 0);
-      const isStandardPut = (putCount >= 2 && putWeights >= 0.35 && putNorm >= 75 && callCount <= 1);
-
-      if ((isFastCall || isStandardCall) && callNorm > putNorm + 10) {
-        finalSig = "CALL";
-        finalConf = Math.min(96, Math.round(Math.max(callNorm, 80)));
-        if (trapVote === "CALL" || bbVote === "CALL" || isHammer) { finalDurLabel = "1 MIN"; finalDurSec = 60; }
-        else if (stDetail.includes("Ruptura") || isMorningStar) { finalDurLabel = "3 MIN"; finalDurSec = 180; }
-        else { finalDurLabel = "2 MIN"; finalDurSec = 120; }
-      } else if ((isFastPut || isStandardPut) && putNorm > callNorm + 10) {
-        finalSig = "PUT";
-        finalConf = Math.min(96, Math.round(Math.max(putNorm, 80)));
-        if (trapVote === "PUT" || bbVote === "PUT" || isShootingStar) { finalDurLabel = "1 MIN"; finalDurSec = 60; }
-        else if (stDetail.includes("Ruptura") || isEveningStar) { finalDurLabel = "3 MIN"; finalDurSec = 180; }
-        else { finalDurLabel = "2 MIN"; finalDurSec = 120; }
+      if (lowerRatio >= 0.35) {
+        subeWeight += 35 + Math.round(lowerRatio * 40);
+        subeReasons.push(`Rechazo inferior (${Math.round(lowerRatio*100)}%)`);
       }
+      if (upperRatio >= 0.35) {
+        bajaWeight += 35 + Math.round(upperRatio * 40);
+        bajaReasons.push(`Rechazo superior (${Math.round(upperRatio*100)}%)`);
+      }
+
+      if (last.color === 1) {
+        if (bodyRatio >= 0.40 && upperRatio <= 0.25) {
+          subeWeight += 30;
+          subeReasons.push("Cuerpo verde expansivo");
+        } else if (bodyRatio <= 0.15 && prev.color === -1) {
+          subeWeight += 20;
+          subeReasons.push("Agotamiento vendedor (Doji)");
+        }
+      } else if (last.color === -1) {
+        if (bodyRatio >= 0.40 && lowerRatio <= 0.25) {
+          bajaWeight += 30;
+          bajaReasons.push("Cuerpo rojo expansivo");
+        } else if (bodyRatio <= 0.15 && prev.color === 1) {
+          bajaWeight += 20;
+          bajaReasons.push("Agotamiento comprador (Doji)");
+        }
+      }
+
+      if (last.color === 1 && prev.color === 1) {
+        subeWeight += 20;
+        subeReasons.push("Impulso verde continuo");
+      } else if (last.color === -1 && prev.color === -1) {
+        bajaWeight += 20;
+        bajaReasons.push("Impulso rojo continuo");
+      }
+
+      if (paVote === "CALL") { subeWeight += 25; subeReasons.push(paDetail); }
+      else if (paVote === "PUT") { bajaWeight += 25; bajaReasons.push(paDetail); }
+
+      if (stVote === "CALL") { subeWeight += 25; subeReasons.push(stDetail); }
+      else if (stVote === "PUT") { bajaWeight += 25; bajaReasons.push(stDetail); }
+
+      if (bbVote === "CALL" || trapVote === "CALL") { subeWeight += 30; subeReasons.push("Rebote / Absorción"); }
+      else if (bbVote === "PUT" || trapVote === "PUT") { bajaWeight += 30; bajaReasons.push("Rechazo / Trampa"); }
+
+      if (rsi < 34) { subeWeight += 20; subeReasons.push(`RSI sobrevendido (${rsi})`); }
+      else if (rsi > 66) { bajaWeight += 20; bajaReasons.push(`RSI sobrecomprado (${rsi})`); }
+
+      if (subeWeight > bajaWeight + 12) {
+        nextCandleDir = "SUBE";
+        nextCandleProb = Math.min(96, Math.round(70 + (subeWeight / (subeWeight + bajaWeight + 1e-5)) * 25));
+        nextCandleReason = subeReasons.slice(0, 2).join(" · ") || "Presión compradora dominante";
+      } else if (bajaWeight > subeWeight + 12) {
+        nextCandleDir = "BAJA";
+        nextCandleProb = Math.min(96, Math.round(70 + (bajaWeight / (subeWeight + bajaWeight + 1e-5)) * 25));
+        nextCandleReason = bajaReasons.slice(0, 2).join(" · ") || "Presión vendedora dominante";
+      }
+
+      let finalSig = "ESPERAR", finalConf = 50, finalDurLabel = "—", finalDurSec = 0;
+
+      if (nextCandleDir === "SUBE" && !blockCall) {
+        finalSig = "CALL";
+        finalConf = nextCandleProb;
+        finalDurLabel = "1 VELA (M1)";
+        finalDurSec = 60;
+      } else if (nextCandleDir === "BAJA" && !blockPut) {
+        finalSig = "PUT";
+        finalConf = nextCandleProb;
+        finalDurLabel = "1 VELA (M1)";
+        finalDurSec = 60;
+      } else if (callNorm > putNorm + 10 && !blockCall) {
+        finalSig = "CALL";
+        finalConf = Math.min(96, Math.round(Math.max(callNorm, 78)));
+        finalDurLabel = "1 VELA (M1)";
+        finalDurSec = 60;
+      } else if (putNorm > callNorm + 10 && !blockPut) {
+        finalSig = "PUT";
+        finalConf = Math.min(96, Math.round(Math.max(putNorm, 78)));
+        finalDurLabel = "1 VELA (M1)";
+        finalDurSec = 60;
+      }
+
+      const nextCandleLabel = nextCandleDir === "SUBE" 
+        ? `🔮 PRÓXIMA VELA: 🟢 SUBE (${nextCandleProb}%)` 
+        : nextCandleDir === "BAJA" 
+        ? `🔮 PRÓXIMA VELA: 🔴 BAJA (${nextCandleProb}%)` 
+        : "🔮 PRÓXIMA VELA: ⚖️ INDECISIÓN";
 
       return {
         signal: finalSig,
@@ -633,9 +731,10 @@
         rsi: rsi,
         trend: callNorm > putNorm ? "Alcista" : putNorm > callNorm ? "Bajista" : "Lateral",
         count: candles.length,
+        nextCandle: { dir: nextCandleDir, label: nextCandleLabel, prob: nextCandleProb, reason: nextCandleReason },
         explanation: finalSig !== "ESPERAR"
-          ? `Confirmación Rápida (${finalConf}% · ${finalSig === "CALL" ? callCount : putCount} agentes): ${finalSig} a ${finalDurLabel}. Gatillo: ${paDetail} | Nivel: ${stDetail}.`
-          : `Consenso IA (Esperar · ${Math.round(Math.max(callNorm, putNorm))}%): Esperando gatillo rápido para operar.`,
+          ? `⚡ ${nextCandleLabel}. Gatillo: ${nextCandleReason} | Nivel: ${stDetail}.`
+          : `Consenso IA (Esperar · ${nextCandleReason}): Esperando confirmación para la próxima vela.`,
         agents: {
           pa: { vote: paVote, detail: paDetail },
           st: { vote: stVote, detail: stDetail },
@@ -686,8 +785,8 @@
         }
       }
 
-      if (candles.length < 8) {
-        infoBanner.innerText = "Pocas velas detectadas. Ajusta el zoom del gráfico en Pocket Option.";
+      if (candles.length < 4) {
+        infoBanner.innerText = "Buscando velas en el gráfico. Asegúrate de enfocar las velas de Pocket Option.";
         return;
       }
 
@@ -701,12 +800,34 @@
         durLabel = (durSec / 60) + " MIN";
       }
 
-      applySignal(evalRes.signal, evalRes.confidence, durLabel, durSec, evalRes.rsi, evalRes.trend, evalRes.count, evalRes.agents);
-      infoBanner.innerText = `Consenso IA: ${evalRes.signal} (${evalRes.confidence}%). Tendencia ${evalRes.trend.toLowerCase()} confirmada por agentes.`;
+      applySignal(evalRes.signal, evalRes.confidence, durLabel, durSec, evalRes.rsi, evalRes.trend, evalRes.count, evalRes.agents, evalRes.nextCandle);
+      infoBanner.innerText = evalRes.explanation;
     }
 
-    function applySignal(sig, conf, durLabel, durSec, rsi, trend, count, agents) {
-      signalText.innerText = sig;
+    let audioCtx = null;
+    function playBeep(freq = 880, duration = 0.18) {
+      try {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+      } catch (e) {}
+    }
+
+    let lastBeepSig = "";
+
+    function applySignal(sig, conf, durLabel, durSec, rsi, trend, count, agents, nextCandle) {
+      if (nextCandle) {
+        nextCandleBadge.innerText = nextCandle.label;
+      }
+      signalText.innerText = sig === "CALL" ? "SUBIR (CALL)" : sig === "PUT" ? "BAJAR (PUT)" : "ESPERAR";
       confidenceText.innerText = `Confianza: ${conf}%`;
       rsiVal.innerText = rsi;
       trendVal.innerText = trend;
@@ -715,10 +836,15 @@
       signalCard.className = "signal-card " + (sig === "CALL" ? "signal-call" : sig === "PUT" ? "signal-put" : "");
 
       if (sig === "CALL" || sig === "PUT") {
+        if (lastBeepSig !== sig) {
+          playBeep(sig === "CALL" ? 880 : 440);
+          lastBeepSig = sig;
+        }
         expBadge.innerText = `⏱️ Tiempo: ${durLabel}`;
         timeVal.innerText = durLabel;
         startCountdown(durSec);
       } else {
+        lastBeepSig = "";
         expBadge.innerText = "⏱️ Tiempo: Esperar";
         timeVal.innerText = "—";
         countdownBadge.innerText = "⏳ Restante: —";

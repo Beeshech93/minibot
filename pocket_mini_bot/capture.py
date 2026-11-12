@@ -39,44 +39,50 @@ def analyze_chart(image):
     green = cv2.morphologyEx(green, cv2.MORPH_OPEN, kernel)
     red = cv2.morphologyEx(red, cv2.MORPH_OPEN, kernel)
 
-    # Aggregate colored pixels by x-column; extract centers and heights
-    xs, centers, directions, heights = [], [], [], []
+    # Aggregate colored pixels by x-column; extract centers, heights, and wick extents
+    xs, centers, directions, heights, top_ys, bot_ys = [], [], [], [], [], []
     for x in range(0, w, max(1, w // 180)):
         gys = np.where(green[:, x] > 0)[0]
         rys = np.where(red[:, x] > 0)[0]
-        if len(gys) >= 5 and len(gys) > len(rys) * 1.25:
+        if len(gys) >= 4 and len(gys) > len(rys) * 1.2:
             ys = gys
             direction = 1
-        elif len(rys) >= 5 and len(rys) > len(gys) * 1.25:
+        elif len(rys) >= 4 and len(rys) > len(gys) * 1.2:
             ys = rys
             direction = -1
         else:
             continue
-        if len(ys) > h * 0.35:  # likely a large UI region, not a candle
+        if len(ys) > h * 0.40:  # likely a large UI region, not a candle
             continue
         xs.append(x)
         centers.append(float(np.median(ys)))
         directions.append(direction)
         heights.append(float(len(ys)))
+        top_ys.append(float(np.min(ys)))
+        bot_ys.append(float(np.max(ys)))
 
     # De-duplicate neighboring x-columns into approximate candle observations.
-    c_xs, c_centers, c_dirs, c_heights = [], [], [], []
-    for x, y, d, h_val in zip(xs, centers, directions, heights):
+    c_xs, c_centers, c_dirs, c_heights, c_tops, c_bots = [], [], [], [], [], []
+    for x, y, d, h_val, ty, by in zip(xs, centers, directions, heights, top_ys, bot_ys):
         if not c_xs or x - c_xs[-1] > max(3, w // 100):
             c_xs.append(x)
             c_centers.append(y)
             c_dirs.append(d)
             c_heights.append(h_val)
+            c_tops.append(ty)
+            c_bots.append(by)
         else:
             c_centers[-1] = (c_centers[-1] + y) / 2.0
             c_dirs[-1] = d
             c_heights[-1] = max(c_heights[-1], h_val)
+            c_tops[-1] = min(c_tops[-1], ty)
+            c_bots[-1] = max(c_bots[-1], by)
 
-    if len(c_xs) < 8:
-        raise ValueError("No se detectaron suficientes cuerpos de velas. Selecciona solo el área del gráfico y verifica los colores.")
+    if len(c_xs) < 4:
+        raise ValueError("No se detectaron suficientes velas. Asegúrate de encuadrar las velas del gráfico.")
 
     # Convert to structured candles and run Multi-Agent consensus evaluation
-    candles = extract_candles_from_data(c_xs, c_centers, c_dirs, c_heights)
+    candles = extract_candles_from_data(c_xs, c_centers, c_dirs, c_heights, c_tops, c_bots)
     master = ConsensusMasterAgent()
     res = master.evaluate(candles)
     res["time"] = datetime.now().strftime("%H:%M:%S")

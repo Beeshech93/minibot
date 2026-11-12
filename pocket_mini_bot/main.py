@@ -56,6 +56,11 @@ class MiniBot(QWidget):
         card_layout.setSpacing(6)
 
         # Signal Type (CALL / PUT / ESPERAR)
+        self.next_candle_badge = QLabel("🔮 PRÓXIMA VELA: EVALUANDO")
+        self.next_candle_badge.setAlignment(Qt.AlignCenter)
+        self.next_candle_badge.setObjectName("nextCandleBadge")
+        card_layout.addWidget(self.next_candle_badge)
+
         self.signal = QLabel("ESPERAR")
         self.signal.setAlignment(Qt.AlignCenter)
         self.signal.setObjectName("signalText")
@@ -239,10 +244,20 @@ class MiniBot(QWidget):
                 border: 1px solid #253347;
                 border-radius: 12px;
             }
-            QLabel#signalText {
-                font-size: 34px;
+            QLabel#nextCandleBadge {
+                background: #0f172a;
+                color: #38bdf8;
+                border: 1px solid #1e293b;
+                border-radius: 8px;
+                padding: 4px 8px;
+                font-size: 11px;
                 font-weight: 800;
-                letter-spacing: 1.5px;
+                letter-spacing: 0.5px;
+            }
+            QLabel#signalText {
+                font-size: 30px;
+                font-weight: 800;
+                letter-spacing: 1.2px;
                 color: #94a3b8;
             }
             QLabel#confidenceText {
@@ -384,6 +399,15 @@ class MiniBot(QWidget):
                     border: 1px solid #10b981;
                     border-radius: 12px;
                 }
+                QLabel#nextCandleBadge {
+                    background: #042f2e;
+                    color: #6ee7b7;
+                    border: 1px solid #10b981;
+                    border-radius: 8px;
+                    padding: 4px 8px;
+                    font-size: 11px;
+                    font-weight: 800;
+                }
                 QLabel#signalText {
                     color: #34d399;
                 }
@@ -405,6 +429,15 @@ class MiniBot(QWidget):
                     border: 1px solid #f43f5e;
                     border-radius: 12px;
                 }
+                QLabel#nextCandleBadge {
+                    background: #2e0814;
+                    color: #fda4af;
+                    border: 1px solid #f43f5e;
+                    border-radius: 8px;
+                    padding: 4px 8px;
+                    font-size: 11px;
+                    font-weight: 800;
+                }
                 QLabel#signalText {
                     color: #fb7185;
                 }
@@ -425,6 +458,15 @@ class MiniBot(QWidget):
                     background: #161f2e;
                     border: 1px solid #253347;
                     border-radius: 12px;
+                }
+                QLabel#nextCandleBadge {
+                    background: #0f172a;
+                    color: #94a3b8;
+                    border: 1px solid #253347;
+                    border-radius: 8px;
+                    padding: 4px 8px;
+                    font-size: 11px;
+                    font-weight: 800;
                 }
                 QLabel#signalText {
                     color: #94a3b8;
@@ -502,8 +544,19 @@ class MiniBot(QWidget):
             image = capture_region(self.region)
             result = analyze_chart(image)
             self.last_result = result
+            
+            next_c = result.get("next_candle", {})
+            next_label = next_c.get("label", "🔮 PRÓXIMA VELA: EVALUANDO")
+            self.next_candle_badge.setText(next_label)
+
             sig = result["signal"]
-            self.signal.setText(sig)
+            if sig == "CALL":
+                self.signal.setText("SUBIR (CALL)")
+            elif sig == "PUT":
+                self.signal.setText("BAJAR (PUT)")
+            else:
+                self.signal.setText("ESPERAR")
+
             self.confidence.setText(f"Confianza: {result['confidence']}%")
             self.update_signal_style(sig)
 

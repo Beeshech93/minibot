@@ -29,10 +29,19 @@ class Candle:
     range_size: float
 
 
-def extract_candles_from_data(xs: List[int], centers: List[float], directions: List[int], heights: List[float]) -> List[Candle]:
-    """Convert raw visual column clusters into detailed Candle objects."""
+def extract_candles_from_data(
+    xs: List[int], 
+    centers: List[float], 
+    directions: List[int], 
+    heights: List[float],
+    top_ys: Optional[List[float]] = None,
+    bot_ys: Optional[List[float]] = None
+) -> List[Candle]:
+    """Convert raw visual column clusters into detailed Candle objects with realistic wicks."""
     candles = []
-    for x, c, d, h in zip(xs, centers, directions, heights):
+    has_wicks = top_ys is not None and bot_ys is not None and len(top_ys) == len(xs)
+
+    for i, (x, c, d, h) in enumerate(zip(xs, centers, directions, heights)):
         body_h = max(2.5, float(h))
         # Chart y is inverted (smaller y = higher price)
         center_price = -c
@@ -45,8 +54,16 @@ def extract_candles_from_data(xs: List[int], centers: List[float], directions: L
             c_open = center_price + half_b
             c_close = center_price - half_b
             
-        upper_w = max(0.5, body_h * 0.3)
-        lower_w = max(0.5, body_h * 0.3)
+        if has_wicks:
+            # -top_ys[i] is highest price, -bot_ys[i] is lowest price
+            raw_high = -top_ys[i]
+            raw_low = -bot_ys[i]
+            upper_w = max(0.5, raw_high - max(c_open, c_close))
+            lower_w = max(0.5, min(c_open, c_close) - raw_low)
+        else:
+            upper_w = max(0.5, body_h * 0.3)
+            lower_w = max(0.5, body_h * 0.3)
+
         c_high = max(c_open, c_close) + upper_w
         c_low = min(c_open, c_close) - lower_w
         rng = max(1.0, c_high - c_low)
@@ -412,6 +429,127 @@ class SmartMoneyTrapAgent:
         }
 
 
+class NextCandlePredictorAgent:
+    """Specialized ultra-fast micro-structure agent predicting the direction of the NEXT candle (SUBE vs BAJA)."""
+    name = "Predictor Próxima Vela"
+
+    def predict(self, candles: List[Candle], r_pa: Dict[str, Any], r_st: Dict[str, Any], r_ind: Dict[str, Any], r_bb: Dict[str, Any], r_trap: Dict[str, Any]) -> Dict[str, Any]:
+        if not candles:
+            return {
+                "direction": "INDECISIÓN",
+                "label": "🔮 PRÓXIMA VELA: ⚖️ INDECISIÓN",
+                "short_label": "⚖️ INDECISIÓN",
+                "probability": 50,
+                "reason": "Sin datos de velas suficientes"
+            }
+
+        c = candles[-1]
+        prev = candles[-2] if len(candles) >= 2 else c
+
+        lower_ratio = c.lower_wick / max(1.0, c.range_size)
+        upper_ratio = c.upper_wick / max(1.0, c.range_size)
+        body_ratio = c.body_size / max(1.0, c.range_size)
+
+        sube_score = 0.0
+        baja_score = 0.0
+        reasons_sube = []
+        reasons_baja = []
+
+        # 1. Micro Price Action de la vela actual (Rechazo de mechas)
+        if lower_ratio >= 0.35:
+            w = 35 + int(lower_ratio * 40)
+            sube_score += w
+            reasons_sube.append(f"Rechazo inferior ({int(lower_ratio*100)}%)")
+        if upper_ratio >= 0.35:
+            w = 35 + int(upper_ratio * 40)
+            baja_score += w
+            reasons_baja.append(f"Rechazo superior ({int(upper_ratio*100)}%)")
+
+        # 2. Impulso del cuerpo en vela viva
+        if c.color == 1:
+            if body_ratio >= 0.40 and upper_ratio <= 0.25:
+                sube_score += 30
+                reasons_sube.append("Cuerpo verde expansivo")
+            elif body_ratio <= 0.15 and prev.color == -1:
+                sube_score += 20
+                reasons_sube.append("Agotamiento vendedor (Doji)")
+        elif c.color == -1:
+            if body_ratio >= 0.40 and lower_ratio <= 0.25:
+                baja_score += 30
+                reasons_baja.append("Cuerpo rojo expansivo")
+            elif body_ratio <= 0.15 and prev.color == 1:
+                baja_score += 20
+                reasons_baja.append("Agotamiento comprador (Doji)")
+
+        # 3. Micro-secuencia de las últimas velas
+        if c.color == 1 and prev.color == 1:
+            sube_score += 20
+            reasons_sube.append("Impulso verde continuo")
+        elif c.color == -1 and prev.color == -1:
+            baja_score += 20
+            reasons_baja.append("Impulso rojo continuo")
+
+        # 4. Aportes de agentes confluentes
+        if r_pa.get("vote") == "CALL":
+            sube_score += 25
+            reasons_sube.append(r_pa.get("pattern", "Patrón alcista"))
+        elif r_pa.get("vote") == "PUT":
+            baja_score += 25
+            reasons_baja.append(r_pa.get("pattern", "Patrón bajista"))
+
+        if r_st.get("vote") == "CALL":
+            sube_score += 25
+            reasons_sube.append(r_st.get("zone", "Soporte clave"))
+        elif r_st.get("vote") == "PUT":
+            baja_score += 25
+            reasons_baja.append(r_st.get("zone", "Resistencia clave"))
+
+        if r_bb.get("vote") == "CALL" or r_trap.get("vote") == "CALL":
+            sube_score += 30
+            reasons_sube.append("Rebote / Absorción institucional")
+        elif r_bb.get("vote") == "PUT" or r_trap.get("vote") == "PUT":
+            baja_score += 30
+            reasons_baja.append("Rechazo / Trampa bajista")
+
+        rsi = r_ind.get("rsi", 50.0)
+        if rsi < 34:
+            sube_score += 20
+            reasons_sube.append(f"RSI sobrevendido ({rsi})")
+        elif rsi > 66:
+            baja_score += 20
+            reasons_baja.append(f"RSI sobrecomprado ({rsi})")
+
+        # 5. Determinación rápida de la Próxima Vela
+        if sube_score > baja_score + 12:
+            prob = min(96, int(70 + (sube_score / (sube_score + baja_score + 1e-5)) * 25))
+            reason = " · ".join(reasons_sube[:2]) if reasons_sube else "Presión compradora dominante"
+            return {
+                "direction": "SUBE",
+                "label": f"🔮 PRÓXIMA VELA: 🟢 SUBE ({prob}%)",
+                "short_label": "🟢 SUBE",
+                "probability": prob,
+                "reason": reason
+            }
+        elif baja_score > sube_score + 12:
+            prob = min(96, int(70 + (baja_score / (sube_score + baja_score + 1e-5)) * 25))
+            reason = " · ".join(reasons_baja[:2]) if reasons_baja else "Presión vendedora dominante"
+            return {
+                "direction": "BAJA",
+                "label": f"🔮 PRÓXIMA VELA: 🔴 BAJA ({prob}%)",
+                "short_label": "🔴 BAJA",
+                "probability": prob,
+                "reason": reason
+            }
+        else:
+            return {
+                "direction": "INDECISIÓN",
+                "label": "🔮 PRÓXIMA VELA: ⚖️ INDECISIÓN",
+                "short_label": "⚖️ INDECISIÓN",
+                "probability": 50,
+                "reason": "Fuerzas equilibradas en la vela actual"
+            }
+
+
 class ConsensusMasterAgent:
     """Institutional Master Consensus Coordinator with Triple-Confluence Verification."""
     def __init__(self):
@@ -421,6 +559,7 @@ class ConsensusMasterAgent:
         self.bb_agent = VolatilityBollingerAgent()
         self.macd_agent = MACDMomentumAgent()
         self.trap_agent = SmartMoneyTrapAgent()
+        self.next_candle_agent = NextCandlePredictorAgent()
 
     def evaluate(self, candles: List[Candle]) -> Dict[str, Any]:
         r_pa = self.pa_agent.analyze(candles)
@@ -488,7 +627,9 @@ class ConsensusMasterAgent:
             put_norm_score *= 0.35
             put_confluences = max(0, put_confluences - 1)
 
-        # 4. CONDICIÓN DE RÁPIDA CONFIRMACIÓN INSTITUCIONAL (Fast Trigger Engine)
+        # 4. CONDICIÓN DE RÁPIDA CONFIRMACIÓN INSTITUCIONAL & PRÓXIMA VELA
+        r_next = self.next_candle_agent.predict(candles, r_pa, r_st, r_ind, r_bb, r_trap)
+
         has_prime_trigger_call = (
             (r_pa.get("vote") == "CALL" and r_pa.get("confidence", 0) >= 84) or
             (r_trap.get("vote") == "CALL" and r_trap.get("confidence", 0) >= 86) or
@@ -515,9 +656,8 @@ class ConsensusMasterAgent:
         if (is_fast_call or is_standard_call) and call_norm_score > put_norm_score + 10:
             final_signal = "CALL"
             final_confidence = min(96, int(max(call_norm_score, 80)))
-            # Tiempo óptimo según gatillo
             if r_trap.get("vote") == "CALL" or r_bb.get("vote") == "CALL" or "Martillo" in r_pa.get("pattern", ""):
-                recommended_time = "1 MIN"   # Rebote elástico rápido
+                recommended_time = "1 VELA (M1)"   # Rebote elástico rápido
                 duration_seconds = 60
             elif "Ruptura" in r_st.get("zone", "") or "Morning" in r_pa.get("pattern", ""):
                 recommended_time = "3 MIN"   # Ruptura con continuación
@@ -530,7 +670,7 @@ class ConsensusMasterAgent:
             final_signal = "PUT"
             final_confidence = min(96, int(max(put_norm_score, 80)))
             if r_trap.get("vote") == "PUT" or r_bb.get("vote") == "PUT" or "Estrella" in r_pa.get("pattern", ""):
-                recommended_time = "1 MIN"   # Corrección elástica rápida
+                recommended_time = "1 VELA (M1)"   # Corrección elástica rápida
                 duration_seconds = 60
             elif "Ruptura" in r_st.get("zone", "") or "Evening" in r_pa.get("pattern", ""):
                 recommended_time = "3 MIN"
@@ -539,19 +679,30 @@ class ConsensusMasterAgent:
                 recommended_time = "2 MIN"
                 duration_seconds = 120
 
+        # Prioridad a la Predicción Inmediata de la Próxima Vela (Fast Next-Candle Trigger)
+        if r_next["direction"] == "SUBE" and not r_st.get("block_call"):
+            final_signal = "CALL"
+            final_confidence = max(final_confidence, r_next["probability"])
+            recommended_time = "1 VELA (M1)"
+            duration_seconds = 60
+        elif r_next["direction"] == "BAJA" and not r_st.get("block_put"):
+            final_signal = "PUT"
+            final_confidence = max(final_confidence, r_next["probability"])
+            recommended_time = "1 VELA (M1)"
+            duration_seconds = 60
+
         # Resumen explicativo de la confluencia
         active_agents = call_confluences if final_signal == "CALL" else put_confluences if final_signal == "PUT" else 0
         if final_signal != "ESPERAR":
             explanation = (
-                f"Triple Confluencia ({final_confidence}% · {active_agents} agentes): {final_signal} a {recommended_time}. "
-                f"Gatillo: {r_pa.get('pattern', 'Acción de precio')} | "
-                f"Nivel: {r_st.get('zone', 'S/R')} | "
-                f"RSI: {r_ind.get('rsi', '—')}."
+                f"⚡ {r_next['label']} ({final_confidence}%). "
+                f"Gatillo: {r_next['reason']} | "
+                f"Nivel: {r_st.get('zone', 'S/R')}."
             )
         else:
             explanation = (
-                f"Consenso IA (Esperar · {int(max(call_score, put_score))}%): "
-                "Filtro de calidad activo. Esperando confluencia mínima de 3 agentes para operar con alta probabilidad."
+                f"Consenso IA (Esperar · {r_next['reason']}): "
+                "Vela actual en consolidación/doji. Esperando que una mecha o cuerpo rompa el rango para entrar."
             )
 
         return {
@@ -560,6 +711,7 @@ class ConsensusMasterAgent:
             "recommended_time": recommended_time,
             "duration_seconds": duration_seconds,
             "explanation": explanation,
+            "next_candle": r_next,
             "rsi": r_ind.get("rsi", 50.0),
             "trend": "Alcista" if call_score > put_score else "Bajista" if put_score > call_score else "Lateral",
             "count": len(candles),
