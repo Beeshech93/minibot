@@ -22,12 +22,12 @@ class ChartDetector:
         if h < 40 or w < 60:
             return image, (0, 0, w, h)
 
-        # Conservative standard chart margin cropping for Pocket Option layout
-        # Top 6% (tabs/pair name), Right 12% (CALL/PUT buttons & payout), Left 3% (tool menu), Bottom 8% (time scale)
-        y_start = int(h * 0.05)
-        y_end = int(h * 0.92)
-        x_start = int(w * 0.04)
-        x_end = int(w * 0.88)
+        # Optimized Pocket Option chart margin cropping:
+        # Top 8% (tabs/pair name), Right 27% (strictly excludes CALL/PUT buttons, payout & timer), Left 5% (tool menu), Bottom 11% (time scale)
+        y_start = int(h * 0.08)
+        y_end = int(h * 0.89)
+        x_start = int(w * 0.05)
+        x_end = int(w * 0.73)
 
         if (x_end - x_start) < 40 or (y_end - y_start) < 40:
             return image, (0, 0, w, h)

@@ -404,8 +404,9 @@
 
     <!-- Chart Region Selector -->
     <select id="zoneSelect">
-      <option value="auto">🎯 Zona: Pocket Option (Auto-Filtro Botones)</option>
-      <option value="center">📐 Zona: Centro de Pantalla (70%)</option>
+      <option value="auto" selected>🎯 Zona: Pocket Option Óptima (Excluye Botones 0-73%)</option>
+      <option value="narrow">🔬 Zona: Solo Gráfico Estricto (Centro 10-70%)</option>
+      <option value="center">📐 Zona: Gráfico Amplio (5-75%)</option>
       <option value="full">🖥️ Zona: Pantalla Completa</option>
     </select>
 
@@ -472,8 +473,9 @@
     const alertBadge = document.getElementById('alertBadge');
 
     zoneSelect.addEventListener('change', () => {
-      cropStatus.innerText = zoneSelect.value === 'auto' ? 'Recorte Pocket Option' :
-                             zoneSelect.value === 'center' ? 'Centro 70%' : 'Pantalla Completa';
+      cropStatus.innerText = zoneSelect.value === 'auto' ? 'Recorte Óptimo (73%)' :
+                             zoneSelect.value === 'narrow' ? 'Solo Gráfico (70%)' :
+                             zoneSelect.value === 'center' ? 'Gráfico Amplio (75%)' : 'Pantalla Completa';
       if (mediaStream) performAnalysis();
     });
 
@@ -1108,19 +1110,25 @@
       const h = canvas.height;
 
       // 1. ZONA DE RECORTE AUTOMÁTICO INTELIGENTE
-      // Elimina de forma estricta los botones de trading (CALL verde y PUT rojo de la derecha),
-      // el saldo superior y las herramientas del menú lateral.
+      // Elimina estrictamente los botones de trading (CALL verde y PUT rojo a la derecha),
+      // el saldo superior, la escala de precios y las herramientas del menú lateral.
       const zone = zoneSelect.value;
       let xStart = 0, xEnd = w, yStart = 0, yEnd = h;
       if (zone === "auto") {
-        xStart = Math.floor(w * 0.11);
-        xEnd = Math.floor(w * 0.81);
-        yStart = Math.floor(h * 0.08);
-        yEnd = Math.floor(h * 0.90);
-      } else if (zone === "center") {
-        xStart = Math.floor(w * 0.15);
-        xEnd = Math.floor(w * 0.85);
+        // En Pocket Option el gráfico activo termina antes del 73%. El panel de botones y payout está a partir del 74%.
+        xStart = Math.floor(w * 0.05);
+        xEnd = Math.floor(w * 0.73);
+        yStart = Math.floor(h * 0.10);
+        yEnd = Math.floor(h * 0.88);
+      } else if (zone === "narrow") {
+        xStart = Math.floor(w * 0.10);
+        xEnd = Math.floor(w * 0.70);
         yStart = Math.floor(h * 0.12);
+        yEnd = Math.floor(h * 0.86);
+      } else if (zone === "center") {
+        xStart = Math.floor(w * 0.12);
+        xEnd = Math.floor(w * 0.72);
+        yStart = Math.floor(h * 0.10);
         yEnd = Math.floor(h * 0.88);
       } else {
         xStart = Math.floor(w * 0.02);
@@ -1136,9 +1144,10 @@
       const frame = ctx.getImageData(xStart, yStart, cropW, cropH);
       const data = frame.data;
 
-      // 2. ESCÁNER DE VELAS Y MECHAS REALES (VISIÓN COMPUTACIONAL)
+      // 2. ESCÁNER DE ALTA RESOLUCIÓN DE PÍXELES DE VELAS
       const rawCols = [];
-      const stepX = Math.max(2, Math.floor(cropW / 140));
+      const stepX = Math.max(2, Math.floor(cropW / 320));
+      const maxColHeight = cropH * 0.82;
 
       for (let x = 0; x < cropW; x += stepX) {
         let gY = [], rY = [];
@@ -1156,70 +1165,84 @@
         }
 
         let d = 0, yArr = null;
-        if (gY.length >= 4 && gY.length > rY.length * 1.2) {
+        if (gY.length >= 3 && gY.length > rY.length * 1.25) {
           d = 1; yArr = gY;
-        } else if (rY.length >= 4 && rY.length > gY.length * 1.2) {
+        } else if (rY.length >= 3 && rY.length > gY.length * 1.25) {
           d = -1; yArr = rY;
         }
 
-        if (d !== 0 && yArr && yArr.length < cropH * 0.70) {
-          const wickTop = yArr[0];
-          const wickBot = yArr[yArr.length - 1];
-          const medianY = yArr[Math.floor(yArr.length / 2)];
-          const bodyH = Math.max(2.5, Math.round(yArr.length * 0.75));
-          const bodyTop = Math.max(wickTop, medianY - Math.floor(bodyH / 2));
-          const bodyBot = Math.min(wickBot, medianY + Math.ceil(bodyH / 2));
-          
+        if (d !== 0 && yArr && yArr.length < maxColHeight) {
           rawCols.push({
             x: x,
             dir: d,
-            bodyTop: bodyTop,
-            bodyBot: bodyBot,
-            wickTop: wickTop,
-            wickBot: wickBot,
-            bodyH: Math.max(2.5, bodyBot - bodyTop)
+            wickTop: yArr[0],
+            wickBot: yArr[yArr.length - 1],
+            spanH: yArr[yArr.length - 1] - yArr[0]
           });
         }
       }
 
-      // 3. AGRUPACIÓN Y DESDUPLICACIÓN EN VELAS INDIVIDUALES
-      const distinctCols = [];
-      const minColDist = Math.max(3, Math.floor(cropW / 120));
+      // 3. AGRUPACIÓN EN BLOQUES DE VELAS CONTIGUAS (CLUSTERIZACIÓN)
+      const clusters = [];
+      const maxColGap = Math.max(3, stepX * 2);
 
-      for (let i = 0; i < rawCols.length; i++) {
-        const rc = rawCols[i];
-        if (distinctCols.length === 0 || rc.x - distinctCols[distinctCols.length - 1].x > minColDist) {
-          distinctCols.push({ ...rc, count: 1 });
+      for (let rc of rawCols) {
+        if (clusters.length === 0 || 
+            (rc.x - clusters[clusters.length - 1].maxX > maxColGap) || 
+            clusters[clusters.length - 1].dir !== rc.dir) {
+          clusters.push({
+            minX: rc.x,
+            maxX: rc.x,
+            dir: rc.dir,
+            wickTop: rc.wickTop,
+            wickBot: rc.wickBot,
+            count: 1
+          });
         } else {
-          const lastC = distinctCols[distinctCols.length - 1];
-          lastC.wickTop = Math.min(lastC.wickTop, rc.wickTop);
-          lastC.wickBot = Math.max(lastC.wickBot, rc.wickBot);
-          lastC.bodyTop = Math.min(lastC.bodyTop, rc.bodyTop);
-          lastC.bodyBot = Math.max(lastC.bodyBot, rc.bodyBot);
-          lastC.bodyH = Math.max(lastC.bodyH, rc.bodyH);
-          lastC.dir = rc.dir;
-          lastC.count++;
+          const cl = clusters[clusters.length - 1];
+          cl.maxX = rc.x;
+          cl.wickTop = Math.min(cl.wickTop, rc.wickTop);
+          cl.wickBot = Math.max(cl.wickBot, rc.wickBot);
+          cl.count++;
         }
       }
 
+      // 4. FILTRADO ESTRICTO ANTI-ARTEFACTOS Y RECONSTRUCCIÓN OHLC
+      const maxCandleWidth = Math.max(22, Math.floor(cropW * 0.032));
+      const minCandleHeight = 4;
       const candles = [];
-      const halfScan = Math.max(3, Math.floor(minColDist * 0.8));
 
-      for (let c of distinctCols) {
-        const xMin = Math.max(0, Math.floor(c.x - halfScan));
-        const xMax = Math.min(cropW - 1, Math.floor(c.x + halfScan));
-        const yMin = Math.floor(c.wickTop);
-        const yMax = Math.ceil(c.wickBot);
+      for (let cl of clusters) {
+        const clusterW = cl.maxX - cl.minX + 1;
 
-        // Medir ancho horizontal fila por fila para aislar el cuerpo real de las mechas
+        // FILTROS ANTI-BOTONES Y ANTI-INTERFAZ:
+        // A. Descartar bloques demasiado anchos (botones CALL/PUT, números de payout, relojes)
+        if (clusterW > maxCandleWidth) continue;
+
+        // B. Descartar elementos pegados al borde derecho (etiquetas de precio actual / strike)
+        if (cl.maxX >= cropW - 6) continue;
+
+        // C. Descartar micro-ruido de píxeles
+        const totalH = cl.wickBot - cl.wickTop;
+        if (totalH < minCandleHeight) continue;
+
+        // D. Descartar líneas horizontales planas (órdenes abiertas, líneas de tendencia broker)
+        if (clusterW >= 12 && totalH <= 4) continue;
+
+        const centerX = Math.round((cl.minX + cl.maxX) / 2);
+        const yMin = Math.floor(cl.wickTop);
+        const yMax = Math.ceil(cl.wickBot);
+
+        // Medir ancho fila por fila para aislar el cuerpo real de las mechas
         let maxRowW = 0;
         const rowCounts = [];
         for (let y = yMin; y <= yMax; y++) {
           let cnt = 0;
-          for (let x = xMin; x <= xMax; x++) {
+          for (let x = cl.minX - 1; x <= cl.maxX + 1; x++) {
+            if (x < 0 || x >= cropW) continue;
             const idx = (y * cropW + x) * 4;
             const r = data[idx], g = data[idx + 1], b = data[idx + 2];
-            const match = c.dir > 0
+            const match = cl.dir > 0
               ? ((g > 85 && g > r * 1.20 && (g - r) > 16 && (g - b) > 6) || (g > 85 && b > 75 && (g + b) > r * 2.2))
               : (r > 85 && r > g * 1.22 && r > b * 1.22 && (r - g) > 18);
             if (match) cnt++;
@@ -1228,8 +1251,11 @@
           if (cnt > maxRowW) maxRowW = cnt;
         }
 
-        // Filas de cuerpo = aquellas con grosor horizontal >= 50% del ancho máximo (mínimo 2px)
-        const bodyThresh = Math.max(2, Math.floor(maxRowW * 0.50));
+        // Si el ancho medido sigue siendo de botón, descartar
+        if (maxRowW > maxCandleWidth) continue;
+
+        // Filas de cuerpo = grosor horizontal >= 48% del ancho máximo (mínimo 2px)
+        const bodyThresh = Math.max(2, Math.floor(maxRowW * 0.48));
         const bodyRows = rowCounts.filter(rw => rw.cnt >= bodyThresh);
 
         let realBodyTop, realBodyBot;
@@ -1247,47 +1273,65 @@
         const lowerWick = Math.max(0.5, yMax - realBodyBot);
         const rangeSize = Math.max(2.0, yMax - yMin);
 
-        // Coordenadas invertidas: mayor precio = menor Y
-        const cOpen = c.dir > 0 ? -realBodyBot : -realBodyTop;
-        const cClose = c.dir > 0 ? -realBodyTop : -realBodyBot;
+        // Coordenadas invertidas: mayor precio = menor Y (arriba)
+        const cOpen = cl.dir > 0 ? -realBodyBot : -realBodyTop;
+        const cClose = cl.dir > 0 ? -realBodyTop : -realBodyBot;
         const cHigh = -yMin;
         const cLow = -yMax;
 
         candles.push({
-          x: c.x,
+          x: centerX,
           open: cOpen,
           close: cClose,
           high: cHigh,
           low: cLow,
-          color: c.dir,
+          color: cl.dir,
           bodySize: bodyH,
           upperWick: upperWick,
           lowerWick: lowerWick,
           rangeSize: rangeSize,
-          px: { x: c.x, bodyTop: realBodyTop, bodyBot: realBodyBot, wickTop: yMin, wickBot: yMax }
+          px: { x: centerX, bodyTop: realBodyTop, bodyBot: realBodyBot, wickTop: yMin, wickBot: yMax, width: Math.max(3, clusterW) }
         });
       }
 
       detectedCount.innerText = candles.length;
 
-      // 4. RADAR DE VISIÓN EN VIVO (DIBUJA LO QUE VE EL BOT)
+      // 5. RADAR DE VISIÓN EN VIVO AUTO-ESCALADO (REPRESENTACIÓN EXACTA DEL GRÁFICO)
       visionCtx.fillStyle = "#070b12";
       visionCtx.fillRect(0, 0, visionCanvas.width, visionCanvas.height);
 
       if (candles.length > 0) {
-        const scaleX = visionCanvas.width / cropW;
-        const scaleY = visionCanvas.height / cropH;
+        const allWickTops = candles.map(cd => cd.px.wickTop);
+        const allWickBots = candles.map(cd => cd.px.wickBot);
+        const minY = Math.min(...allWickTops);
+        const maxY = Math.max(...allWickBots);
+        const spanY = Math.max(10, maxY - minY);
 
-        for (let cd of candles) {
-          const drawX = Math.round(cd.px.x * scaleX);
-          const drawWT = Math.round(cd.px.wickTop * scaleY);
-          const drawWB = Math.round(cd.px.wickBot * scaleY);
-          const drawBT = Math.round(cd.px.bodyTop * scaleY);
-          const drawBB = Math.round(cd.px.bodyBot * scaleY);
+        const allXs = candles.map(cd => cd.px.x);
+        const minX = Math.min(...allXs);
+        const maxX = Math.max(...allXs);
+        const spanX = Math.max(20, maxX - minX);
+
+        const padX = 14;
+        const padY = 16;
+        const drawW = visionCanvas.width - padX * 2;
+        const drawH = visionCanvas.height - padY * 2;
+
+        const scaleX = drawW / spanX;
+        const scaleY = drawH / spanY;
+
+        for (let i = 0; i < candles.length; i++) {
+          const cd = candles[i];
+          const isLatest = (i === candles.length - 1);
+          const drawX = Math.round(padX + (cd.px.x - minX) * scaleX);
+          const drawWT = Math.round(padY + (cd.px.wickTop - minY) * scaleY);
+          const drawWB = Math.round(padY + (cd.px.wickBot - minY) * scaleY);
+          const drawBT = Math.round(padY + (cd.px.bodyTop - minY) * scaleY);
+          const drawBB = Math.round(padY + (cd.px.bodyBot - minY) * scaleY);
 
           // Línea de mechas
           visionCtx.strokeStyle = cd.color > 0 ? "#10b981" : "#f43f5e";
-          visionCtx.lineWidth = 1;
+          visionCtx.lineWidth = isLatest ? 2 : 1;
           visionCtx.beginPath();
           visionCtx.moveTo(drawX, drawWT);
           visionCtx.lineTo(drawX, drawWB);
@@ -1295,14 +1339,22 @@
 
           // Cuerpo de vela
           visionCtx.fillStyle = cd.color > 0 ? "#10b981" : "#f43f5e";
-          const bodyW = Math.max(3, Math.round(6 * scaleX * (cropW / 400)));
+          const bodyW = Math.max(3, Math.min(10, Math.round(cd.px.width * scaleX * 0.95)));
           const rectH = Math.max(2, drawBB - drawBT);
           visionCtx.fillRect(drawX - Math.floor(bodyW / 2), drawBT, bodyW, rectH);
+
+          // Indicador brillante sobre la vela actual (en vivo)
+          if (isLatest) {
+            visionCtx.fillStyle = "#38bdf8";
+            visionCtx.beginPath();
+            visionCtx.arc(drawX, Math.min(drawWT, drawBT) - 5, 2.5, 0, Math.PI * 2);
+            visionCtx.fill();
+          }
         }
 
-        visionCtx.fillStyle = "rgba(255, 255, 255, 0.75)";
+        visionCtx.fillStyle = "rgba(255, 255, 255, 0.85)";
         visionCtx.font = "9px sans-serif";
-        visionCtx.fillText(`Velas: ${candles.length} | Analizando Tiempo Real`, 8, 14);
+        visionCtx.fillText(`Velas Reales: ${candles.length} | Sin Artefactos`, 8, 12);
       } else {
         visionCtx.fillStyle = "#64748b";
         visionCtx.font = "10px sans-serif";

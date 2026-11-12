@@ -63,8 +63,12 @@ class CandleDetector:
             contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             for cnt in contours:
                 bx, by, bw, bh = cv2.boundingRect(cnt)
-                # Filter noise and huge container borders
-                if bh < 4 or bw > max(45, int(w * 0.12)) or bh > h * 0.85:
+                # Filter noise and huge container borders (e.g. green HIGHER button, timers, order tags)
+                max_allowed_w = max(22, int(w * 0.032))
+                if bh < 4 or bw > max_allowed_w or bh > h * 0.85:
+                    continue
+                # Exclude right-edge border artifacts
+                if (bx + bw) >= w - 6:
                     continue
 
                 roi = mask[by:by + bh, bx:bx + bw]
