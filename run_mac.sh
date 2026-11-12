@@ -2,4 +2,5 @@
 set -e
 cd "$(dirname "$0")"
 source .venv/bin/activate
-python pocket_mini_bot/main.py
+export PYTHONPATH="POCKET_MINI_BOT_PRO:$PYTHONPATH"
+exec python POCKET_MINI_BOT_PRO/main.py "$@"
