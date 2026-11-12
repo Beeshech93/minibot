@@ -58,8 +58,8 @@ def analyze_chart(image):
         cnts, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         for c in cnts:
             bx, by, bw, bh = cv2.boundingRect(c)
-            # Filter noise and huge UI containers
-            if bh < 4 or bw > w * 0.20 or bh > h * 0.85:
+            # Filter noise and huge UI containers (e.g. green CALL / red PUT buttons)
+            if bh < 4 or bw > max(40, int(w * 0.10)) or bh > h * 0.80:
                 continue
             roi = mask[by:by+bh, bx:bx+bw]
             row_widths = np.sum(roi > 0, axis=1)
