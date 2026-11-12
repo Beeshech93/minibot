@@ -15,7 +15,7 @@ class MiniBot(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Pocket Mini Bot")
-        self.setFixedSize(340, 570)
+        self.setFixedSize(340, 590)
         self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
         self.region = None
         self.last_result = None
@@ -120,23 +120,26 @@ class MiniBot(QWidget):
         agents_layout.setContentsMargins(10, 8, 10, 8)
         agents_layout.setSpacing(3)
 
-        agents_header = QLabel("🤖 Consenso de Agentes IA (4 especialistas)")
+        agents_header = QLabel("🤖 Comité de 6 Agentes IA (Triple Confluencia)")
         agents_header.setObjectName("agentsHeader")
         agents_layout.addWidget(agents_header)
 
         self.agent_pa = QLabel("• Acción del Precio: Esperando datos")
         self.agent_pa.setObjectName("agentRow")
-        self.agent_st = QLabel("• Estructura S/R: Mapeando niveles")
+        self.agent_st = QLabel("• Estructura & S/R: Mapeando niveles")
         self.agent_st.setObjectName("agentRow")
         self.agent_ind = QLabel("• Indicadores & EMA: Calculando")
         self.agent_ind.setObjectName("agentRow")
-        self.agent_mom = QLabel("• Volumen & Flujo: Monitoreando")
-        self.agent_mom.setObjectName("agentRow")
+        self.agent_bb = QLabel("• Bollinger & Squeeze: Monitoreando")
+        self.agent_bb.setObjectName("agentRow")
+        self.agent_macd = QLabel("• MACD & Trampas: Vigilando")
+        self.agent_macd.setObjectName("agentRow")
 
         agents_layout.addWidget(self.agent_pa)
         agents_layout.addWidget(self.agent_st)
         agents_layout.addWidget(self.agent_ind)
-        agents_layout.addWidget(self.agent_mom)
+        agents_layout.addWidget(self.agent_bb)
+        agents_layout.addWidget(self.agent_macd)
         root.addWidget(self.agents_frame)
 
         # Timeframe mode selector (Auto vs Fixed 1m, 2m, 3m, 5m)
@@ -558,18 +561,23 @@ class MiniBot(QWidget):
         pa = agents_dict.get("price_action", {})
         st = agents_dict.get("structure", {})
         ind = agents_dict.get("indicators", {})
-        mom = agents_dict.get("momentum", {})
+        bb = agents_dict.get("bollinger", {})
+        macd = agents_dict.get("macd", {})
+        trap = agents_dict.get("trap", {})
 
         def fmt(tag, d, key):
             vote = d.get("vote", "—")
-            sub = d.get(key, d.get("reason", ""))
+            sub = d.get(key, d.get("reason", d.get("state", "")))
             icon = "🟢" if vote == "CALL" else "🔴" if vote == "PUT" else "⚪"
-            return f"{icon} {tag}: {vote} ({sub[:28]})"
+            return f"{icon} {tag}: {vote} ({sub[:26]})"
 
         self.agent_pa.setText(fmt("Patrones", pa, "pattern"))
         self.agent_st.setText(fmt("Estructura S/R", st, "zone"))
         self.agent_ind.setText(fmt("Indicadores", ind, "reason"))
-        self.agent_mom.setText(fmt("Flujo/Volumen", mom, "state"))
+        self.agent_bb.setText(fmt("Bollinger", bb, "state"))
+        target_agent = trap if trap.get("vote") != "ESPERAR" else macd
+        target_key = "trap" if trap.get("vote") != "ESPERAR" else "state"
+        self.agent_macd.setText(fmt("MACD/Trampa", target_agent, target_key))
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

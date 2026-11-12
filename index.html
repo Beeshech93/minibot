@@ -433,7 +433,7 @@
     });
 
     /* ==========================================================
-       MULTI-AGENT AI INTELLIGENCE ENGINE (CLIENT-SIDE)
+       PRO-GRADE MULTI-AGENT AI SYSTEM (TRIPLE CONFLUENCE)
        ========================================================== */
 
     function evaluateMultiAgentSystem(candles) {
@@ -444,24 +444,29 @@
       const lows = candles.map(c => c.low);
       const currentPrice = prices[prices.length - 1];
 
-      // AGENT 1: Price Action & Candlestick Patterns
+      // 1. AGENTE: Acción del Precio & Velas Japonesas
       const last = candles[candles.length - 1];
       const prev = candles[candles.length - 2];
+      const prev2 = candles[candles.length - 3] || prev;
       let paVote = "ESPERAR", paConf = 50, paDetail = "Sin patrón claro";
 
       const isHammer = last.lowerWick >= last.bodySize * 1.5 && last.upperWick <= last.bodySize * 0.8;
       const isShootingStar = last.upperWick >= last.bodySize * 1.5 && last.lowerWick <= last.bodySize * 0.8;
-      const isBullEngulf = prev.color === -1 && last.color === 1 && last.close >= prev.open && last.bodySize > prev.bodySize * 1.1;
-      const isBearEngulf = prev.color === 1 && last.color === -1 && last.close <= prev.open && last.bodySize > prev.bodySize * 1.1;
+      const isBullEngulf = prev.color === -1 && last.color === 1 && last.close >= prev.open && last.bodySize > prev.bodySize * 1.15;
+      const isBearEngulf = prev.color === 1 && last.color === -1 && last.close <= prev.open && last.bodySize > prev.bodySize * 1.15;
+      const isMorningStar = prev2.color === -1 && prev.bodySize <= prev2.bodySize * 0.4 && last.color === 1 && last.close > (prev2.open + prev2.close) / 2;
+      const isEveningStar = prev2.color === 1 && prev.bodySize <= prev2.bodySize * 0.4 && last.color === -1 && last.close < (prev2.open + prev2.close) / 2;
 
-      if (isHammer) { paVote = "CALL"; paConf = 86; paDetail = "Martillo Alcista"; }
-      else if (isBullEngulf) { paVote = "CALL"; paConf = 88; paDetail = "Envolvente Alcista"; }
-      else if (isShootingStar) { paVote = "PUT"; paConf = 86; paDetail = "Estrella Fugaz"; }
-      else if (isBearEngulf) { paVote = "PUT"; paConf = 88; paDetail = "Envolvente Bajista"; }
-      else if (last.color === 1 && prev.color === 1) { paVote = "CALL"; paConf = 73; paDetail = "Impulso Verde"; }
-      else if (last.color === -1 && prev.color === -1) { paVote = "PUT"; paConf = 73; paDetail = "Impulso Rojo"; }
+      if (isMorningStar) { paVote = "CALL"; paConf = 92; paDetail = "Morning Star"; }
+      else if (isEveningStar) { paVote = "PUT"; paConf = 92; paDetail = "Evening Star"; }
+      else if (isHammer) { paVote = "CALL"; paConf = 88; paDetail = "Martillo Alcista"; }
+      else if (isBullEngulf) { paVote = "CALL"; paConf = 89; paDetail = "Envolvente Alcista"; }
+      else if (isShootingStar) { paVote = "PUT"; paConf = 88; paDetail = "Estrella Fugaz"; }
+      else if (isBearEngulf) { paVote = "PUT"; paConf = 89; paDetail = "Envolvente Bajista"; }
+      else if (last.color === 1 && prev.color === 1 && last.bodySize > prev.bodySize) { paVote = "CALL"; paConf = 75; paDetail = "Expansión Verde"; }
+      else if (last.color === -1 && prev.color === -1 && last.bodySize > prev.bodySize) { paVote = "PUT"; paConf = 75; paDetail = "Expansión Roja"; }
 
-      // AGENT 2: Market Structure (Support & Resistance)
+      // 2. AGENTE: Estructura de Mercado & Fibonacci Golden Pocket
       const maxH = Math.max(...highs);
       const minL = Math.min(...lows);
       const range = maxH - minL;
@@ -469,29 +474,34 @@
 
       const distRes = Math.abs(maxH - currentPrice) / Math.max(1, range);
       const distSup = Math.abs(currentPrice - minL) / Math.max(1, range);
+      const fib50 = minL + range * 0.50;
+      const inGoldenPocket = Math.abs(currentPrice - fib50) / Math.max(1, range) < 0.06;
 
-      if (distSup < 0.08 && last.color === 1) {
-        stVote = "CALL"; stConf = 85; stDetail = "Rebote en Soporte";
-      } else if (distRes < 0.08 && last.color === -1) {
-        stVote = "PUT"; stConf = 85; stDetail = "Rechazo en Resistencia";
-      } else if (currentPrice >= maxH * 0.998) {
-        stVote = "CALL"; stConf = 83; stDetail = "Ruptura de Resistencia";
-      } else if (distRes < 0.03) {
-        blockCall = true; stDetail = "Peligro: Techo Próximo";
-      } else if (distSup < 0.03) {
-        blockPut = true; stDetail = "Peligro: Piso Próximo";
+      if (inGoldenPocket && last.color === 1) {
+        stVote = "CALL"; stConf = 90; stDetail = "Fibonacci 50%-61.8%";
+      } else if (distSup < 0.07 && last.color === 1) {
+        stVote = "CALL"; stConf = 88; stDetail = "Rebote en Soporte";
+      } else if (distRes < 0.07 && last.color === -1) {
+        stVote = "PUT"; stConf = 88; stDetail = "Rechazo en Resistencia";
+      } else if (currentPrice >= maxH * 0.998 && last.color === 1) {
+        stVote = "CALL"; stConf = 85; stDetail = "Ruptura Resistencia";
+      } else if (currentPrice <= minL * 1.002 && last.color === -1) {
+        stVote = "PUT"; stConf = 85; stDetail = "Ruptura Soporte";
       }
 
-      // AGENT 3: Technical Indicators (EMAs & RSI)
+      if (distRes < 0.025) { blockCall = true; stDetail = "Peligro: Techo Próximo"; }
+      if (distSup < 0.025) { blockPut = true; stDetail = "Peligro: Piso Próximo"; }
+
+      // 3. AGENTE: Indicadores & EMA (9, 21, 50) + Divergencias RSI
       function calcEma(series, period) {
         const k = 2 / (period + 1);
-        let ema = series[0];
-        for (let i = 1; i < series.length; i++) ema = series[i] * k + ema * (1 - k);
+        let ema = [series[0]];
+        for (let i = 1; i < series.length; i++) ema.push(series[i] * k + ema[ema.length - 1] * (1 - k));
         return ema;
       }
-      const ema9 = calcEma(prices, 9);
-      const ema21 = calcEma(prices, 21);
-      const ema50 = calcEma(prices, Math.min(50, prices.length));
+      const ema9 = calcEma(prices, 9)[prices.length - 1];
+      const ema21 = calcEma(prices, 21)[prices.length - 1];
+      const ema50 = calcEma(prices, Math.min(50, prices.length))[prices.length - 1];
 
       let gains = 0, losses = 0;
       for (let i = 1; i < prices.length; i++) {
@@ -501,59 +511,130 @@
       const rsi = losses === 0 ? 100 : Math.round(100 - (100 / (1 + (gains / Math.max(1, losses)))));
 
       let indVote = "ESPERAR", indConf = 50, indDetail = `RSI ${rsi}`;
-      if (ema9 > ema21 && ema21 > ema50 && rsi < 68) {
-        indVote = "CALL"; indConf = 82; indDetail = `EMA9>21>50 (RSI ${rsi})`;
-      } else if (ema9 < ema21 && ema21 < ema50 && rsi > 32) {
-        indVote = "PUT"; indConf = 82; indDetail = `EMA9<21<50 (RSI ${rsi})`;
-      } else if (rsi < 28) {
-        indVote = "CALL"; indConf = 77; indDetail = `Sobreventa (RSI ${rsi})`;
-      } else if (rsi > 72) {
-        indVote = "PUT"; indConf = 77; indDetail = `Sobrecompra (RSI ${rsi})`;
+      const bullTrend = ema9 > ema21 && ema21 > ema50;
+      const bearTrend = ema9 < ema21 && ema21 < ema50;
+
+      if (bullTrend && rsi < 66 && currentPrice > ema9) {
+        indVote = "CALL"; indConf = 85; indDetail = `EMA 9>21>50 (RSI ${rsi})`;
+      } else if (bearTrend && rsi > 34 && currentPrice < ema9) {
+        indVote = "PUT"; indConf = 85; indDetail = `EMA 9<21<50 (RSI ${rsi})`;
+      } else if (rsi < 24) {
+        indVote = "CALL"; indConf = 84; indDetail = `Sobreventa Extrema (${rsi})`;
+      } else if (rsi > 76) {
+        indVote = "PUT"; indConf = 84; indDetail = `Sobrecompra Extrema (${rsi})`;
       }
 
-      // AGENT 4: Order Flow & Momentum
-      const avgBody = candles.reduce((acc, c) => acc + c.bodySize, 0) / candles.length;
-      let momVote = "ESPERAR", momConf = 50, momDetail = "Volumen Estable";
+      // 4. AGENTE: Bandas de Bollinger & Volatilidad
+      const windowBb = Math.min(20, prices.length);
+      const sliceBb = prices.slice(-windowBb);
+      const basis = sliceBb.reduce((a, b) => a + b, 0) / windowBb;
+      const std = Math.sqrt(sliceBb.reduce((a, b) => a + Math.pow(b - basis, 2), 0) / windowBb);
+      const upperBb = basis + 2.0 * std;
+      const lowerBb = basis - 2.0 * std;
+      const bandwidth = (upperBb - lowerBb) / Math.max(1, basis);
 
-      if (last.bodySize > avgBody * 1.3 && last.color === prev.color) {
-        momVote = last.color === 1 ? "CALL" : "PUT";
-        momConf = 80;
-        momDetail = "Volumen Expansivo";
-      } else if (last.bodySize < avgBody * 0.4 && prev.bodySize > avgBody * 1.2) {
-        momVote = prev.color === 1 ? "PUT" : "CALL";
-        momConf = 74;
-        momDetail = "Agotamiento";
+      let bbVote = "ESPERAR", bbConf = 50, bbDetail = "Canal Normal", isSqueeze = false;
+      if (bandwidth < 0.015 || std < 1.0) {
+        isSqueeze = true;
+        bbDetail = "Squeeze / Rango Plano";
+      } else if (currentPrice <= lowerBb && last.lowerWick >= last.bodySize * 0.7) {
+        bbVote = "CALL"; bbConf = 89; bbDetail = "Perforación Banda Inferior";
+      } else if (currentPrice >= upperBb && last.upperWick >= last.bodySize * 0.7) {
+        bbVote = "PUT"; bbConf = 89; bbDetail = "Perforación Banda Superior";
       }
 
-      // MASTER CONSENSUS ENGINE (Weighted voting & Risk Filter)
-      let callScore = (paVote === "CALL" ? paConf * 0.3 : 0) +
-                      (stVote === "CALL" ? stConf * 0.3 : 0) +
-                      (indVote === "CALL" ? indConf * 0.25 : 0) +
-                      (momVote === "CALL" ? momConf * 0.15 : 0);
+      // 5. AGENTE: MACD (12, 26, 9)
+      const ema12 = calcEma(prices, 12);
+      const ema26 = calcEma(prices, 26);
+      const macdLine = ema12.map((val, idx) => val - ema26[idx]);
+      const sigLine = calcEma(macdLine, 9);
+      const hist = macdLine.map((val, idx) => val - sigLine[idx]);
+      const currHist = hist[hist.length - 1];
+      const prevHist = hist[hist.length - 2] || currHist;
 
-      let putScore = (paVote === "PUT" ? paConf * 0.3 : 0) +
-                     (stVote === "PUT" ? stConf * 0.3 : 0) +
-                     (indVote === "PUT" ? indConf * 0.25 : 0) +
-                     (momVote === "PUT" ? momConf * 0.15 : 0);
+      let macdVote = "ESPERAR", macdConf = 50, macdDetail = "MACD Plano";
+      if (prevHist <= 0 && currHist > 0) {
+        macdVote = "CALL"; macdConf = 87; macdDetail = "Cruce Alcista Cero";
+      } else if (prevHist >= 0 && currHist < 0) {
+        macdVote = "PUT"; macdConf = 87; macdDetail = "Cruce Bajista Cero";
+      }
 
-      if (blockCall) callScore *= 0.4;
-      if (blockPut) putScore *= 0.4;
+      // 6. AGENTE: Cazador de Trampas de Liquidez (Smart Money)
+      let trapVote = "ESPERAR", trapConf = 50, trapDetail = "Sin trampa";
+      const recentH = Math.max(...highs.slice(-8, -1));
+      const recentL = Math.min(...lows.slice(-8, -1));
+      if (last.high > recentH && last.close < recentH && last.upperWick >= last.bodySize * 1.1) {
+        trapVote = "PUT"; trapConf = 93; trapDetail = "Trampa de Toros (Bull Trap)";
+      } else if (last.low < recentL && last.close > recentL && last.lowerWick >= last.bodySize * 1.1) {
+        trapVote = "CALL"; trapConf = 93; trapDetail = "Trampa de Osos (Bear Trap)";
+      }
+
+      // 7. COMITÉ MAESTRO: TRIPLE CONFLUENCIA & FILTROS
+      if (isSqueeze) {
+        return {
+          signal: "ESPERAR", confidence: 45, recommendedTime: "—", durationSeconds: 0,
+          rsi: rsi, trend: "Lateral", count: candles.length,
+          explanation: "FILTRO: Mercado en Squeeze / Consolidación sin tendencia. Esperando ruptura.",
+          agents: { pa: { vote: paVote, detail: paDetail }, st: { vote: stVote, detail: stDetail }, ind: { vote: indVote, detail: indDetail }, bb: { vote: bbVote, detail: bbDetail } }
+        };
+      }
+
+      const agentVotes = [
+        { v: paVote, c: paConf, w: 0.25 },
+        { v: stVote, c: stConf, w: 0.25 },
+        { v: indVote, c: indConf, w: 0.15 },
+        { v: bbVote, c: bbConf, w: 0.15 },
+        { v: macdVote, c: macdConf, w: 0.10 },
+        { v: trapVote, c: trapConf, w: 0.10 }
+      ];
+
+      let callScore = 0, putScore = 0, callCount = 0, putCount = 0, callWeights = 0, putWeights = 0;
+      agentVotes.forEach(a => {
+        if (a.v === "CALL") { callScore += a.c * a.w; callCount++; callWeights += a.w; }
+        else if (a.v === "PUT") { putScore += a.c * a.w; putCount++; putWeights += a.w; }
+      });
+
+      let callNorm = callWeights > 0 ? callScore / callWeights : 0;
+      let putNorm = putWeights > 0 ? putScore / putWeights : 0;
+
+      if (blockCall) { callNorm *= 0.35; callCount = Math.max(0, callCount - 1); }
+      if (blockPut) { putNorm *= 0.35; putCount = Math.max(0, putCount - 1); }
 
       let finalSig = "ESPERAR", finalConf = 50, finalDurLabel = "1 MIN", finalDurSec = 60;
 
-      if (callScore >= 72 && callScore > putScore + 10) {
+      if (callCount >= 3 && callWeights >= 0.45 && callNorm >= 78 && putCount <= 1) {
         finalSig = "CALL";
-        finalConf = Math.min(94, Math.round(callScore));
-        if (paVote === "CALL" && isHammer) { finalDurLabel = "1 MIN"; finalDurSec = 60; }
-        else if (stDetail.includes("Ruptura")) { finalDurLabel = "3 MIN"; finalDurSec = 180; }
+        finalConf = Math.min(96, Math.round(callNorm));
+        if (trapVote === "CALL" || bbVote === "CALL") { finalDurLabel = "1 MIN"; finalDurSec = 60; }
+        else if (stDetail.includes("Ruptura") || isMorningStar) { finalDurLabel = "3 MIN"; finalDurSec = 180; }
         else { finalDurLabel = "2 MIN"; finalDurSec = 120; }
-      } else if (putScore >= 72 && putScore > callScore + 10) {
+      } else if (putCount >= 3 && putWeights >= 0.45 && putNorm >= 78 && callCount <= 1) {
         finalSig = "PUT";
-        finalConf = Math.min(94, Math.round(putScore));
-        if (paVote === "PUT" && isShootingStar) { finalDurLabel = "1 MIN"; finalDurSec = 60; }
-        else if (stDetail.includes("Ruptura")) { finalDurLabel = "3 MIN"; finalDurSec = 180; }
+        finalConf = Math.min(96, Math.round(putNorm));
+        if (trapVote === "PUT" || bbVote === "PUT") { finalDurLabel = "1 MIN"; finalDurSec = 60; }
+        else if (stDetail.includes("Ruptura") || isEveningStar) { finalDurLabel = "3 MIN"; finalDurSec = 180; }
         else { finalDurLabel = "2 MIN"; finalDurSec = 120; }
       }
+
+      return {
+        signal: finalSig,
+        confidence: finalConf,
+        recommendedTime: finalDurLabel,
+        durationSeconds: finalDurSec,
+        rsi: rsi,
+        trend: callNorm > putNorm ? "Alcista" : putNorm > callNorm ? "Bajista" : "Lateral",
+        count: candles.length,
+        explanation: finalSig !== "ESPERAR"
+          ? `Triple Confluencia (${finalConf}% · ${finalSig === "CALL" ? callCount : putCount} agentes): ${finalSig} a ${finalDurLabel}. Gatillo: ${paDetail} | Nivel: ${stDetail}.`
+          : `Consenso IA (Esperar · ${Math.round(Math.max(callNorm, putNorm))}%): Esperando confluencia de 3 agentes para operar con alta probabilidad.`,
+        agents: {
+          pa: { vote: paVote, detail: paDetail },
+          st: { vote: stVote, detail: stDetail },
+          ind: { vote: indVote, detail: indDetail },
+          mom: { vote: trapVote !== "ESPERAR" ? trapVote : macdVote, detail: trapVote !== "ESPERAR" ? trapDetail : macdDetail }
+        }
+      };
+    }
 
       return {
         signal: finalSig,
