@@ -557,7 +557,9 @@ class MiniBot(QWidget):
             else:
                 self.signal.setText("ESPERAR")
 
-            self.confidence.setText(f"Confianza: {result['confidence']}%")
+            prob_call = result.get("prob_call", 50.0)
+            prob_put = result.get("prob_put", 50.0)
+            self.confidence.setText(f"Probabilidad Bayesiana: {result['confidence']}% · (🟢 {prob_call}% | 🔴 {prob_put}%)")
             self.update_signal_style(sig)
 
             # Determine duration based on user preference or AI recommendation

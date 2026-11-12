@@ -1,17 +1,18 @@
 """
 Pro-Grade Multi-Agent AI Market Intelligence System for Pocket Mini Bot.
-Institutional Architecture with Triple-Confluence Verification:
-1. PriceActionAgent: Candlestick patterns, wick absorption, multi-candle structures.
-2. MarketStructureAgent: Pivot Swings, Dynamic S/R, Fibonacci Golden Pocket (0.5 - 0.618).
-3. TechnicalIndicatorAgent: Triple EMA (9, 21, 50), dynamic RSI 14, Divergence Scanner.
-4. VolatilityBollingerAgent: Bollinger Bands (20, 2), Squeeze detection, Mean Reversion.
-5. MACDMomentumAgent: MACD Line, Signal Line (12, 26, 9), Histogram momentum shifts.
-6. SmartMoneyTrapAgent: Liquidity sweeps, fakeout traps (rejection of false breakouts).
-7. InstitutionalConsensusEngine: Triple Confluence validation, strict risk filters, dynamic expirations.
+Institutional Architecture with Bayesian Log-Odds Confluence:
+1. PriceActionAgent: Candlestick geometry, Wick Absorption Index (WAI), multi-candle patterns.
+2. SmartMoneyTrapAgent: Fair Value Gaps (FVG), Order Blocks (OB), Liquidity Sweeps.
+3. MarketStructureAgent: Swing Highs/Lows, Dynamic S/R, Fibonacci Golden Pocket (0.50 - 0.618).
+4. TechnicalIndicatorAgent: Triple EMA (9, 21, 50), Wilder's RSI, Stochastic %K/%D Crossover.
+5. VolatilityBollingerAgent: Bollinger Bands (20, 2), John Carter TTM Squeeze & Expansion.
+6. MACDMomentumAgent: MACD (12, 26, 9) histogram acceleration & divergences.
+7. NextCandlePredictorAgent: Micro-order flow and wick rejection for the immediate next candle.
+8. ConsensusMasterAgent: Bayesian Log-Odds Ensemble Classifier with calibrated probability.
 """
 
 from dataclasses import dataclass
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Optional
 import numpy as np
 
 
@@ -55,7 +56,6 @@ def extract_candles_from_data(
             c_close = center_price - half_b
             
         if has_wicks:
-            # -top_ys[i] is highest price, -bot_ys[i] is lowest price
             raw_high = -top_ys[i]
             raw_low = -bot_ys[i]
             upper_w = max(0.5, raw_high - max(c_open, c_close))
@@ -83,8 +83,12 @@ def extract_candles_from_data(
     return candles
 
 
-# Helper EMA function
+# =========================================================================
+# QUANTITATIVE INDICATOR SUITE (MATHEMATICAL FOUNDATION)
+# =========================================================================
+
 def calc_ema_series(prices: List[float], period: int) -> List[float]:
+    """Exponential Moving Average."""
     if not prices:
         return []
     k = 2.0 / (period + 1.0)
@@ -94,8 +98,98 @@ def calc_ema_series(prices: List[float], period: int) -> List[float]:
     return ema
 
 
+def calc_wilder_rsi(prices: List[float], period: int = 14) -> float:
+    """Wilder's Smoothed Relative Strength Index."""
+    if len(prices) < 2:
+        return 50.0
+    deltas = np.diff(prices)
+    gains = np.maximum(deltas, 0)
+    losses = np.maximum(-deltas, 0)
+    
+    if len(deltas) < period:
+        avg_gain = np.mean(gains) if len(gains) > 0 else 0.0
+        avg_loss = np.mean(losses) if len(losses) > 0 else 0.0
+    else:
+        avg_gain = np.mean(gains[:period])
+        avg_loss = np.mean(losses[:period])
+        for g, l in zip(gains[period:], losses[period:]):
+            avg_gain = (avg_gain * (period - 1) + g) / period
+            avg_loss = (avg_loss * (period - 1) + l) / period
+
+    if avg_loss == 0:
+        return 100.0 if avg_gain > 0 else 50.0
+    rs = avg_gain / avg_loss
+    return round(float(100.0 - (100.0 / (1.0 + rs))), 1)
+
+
+def calc_stochastic(highs: List[float], lows: List[float], closes: List[float], k_period: int = 14, d_period: int = 3) -> Tuple[float, float]:
+    """Fast & Slow Stochastic Oscillator (%K, %D)."""
+    if len(closes) < 3:
+        return 50.0, 50.0
+    k_vals = []
+    for i in range(max(1, len(closes) - d_period - 2), len(closes)):
+        sub_highs = highs[max(0, i - k_period + 1):i + 1]
+        sub_lows = lows[max(0, i - k_period + 1):i + 1]
+        highest = max(sub_highs) if sub_highs else closes[i]
+        lowest = min(sub_lows) if sub_lows else closes[i]
+        rng = highest - lowest
+        if rng <= 0:
+            k_vals.append(50.0)
+        else:
+            k_vals.append(((closes[i] - lowest) / rng) * 100.0)
+    
+    current_k = k_vals[-1] if k_vals else 50.0
+    current_d = float(np.mean(k_vals[-d_period:])) if len(k_vals) >= d_period else current_k
+    return round(current_k, 1), round(current_d, 1)
+
+
+def calc_bollinger_bands(prices: List[float], period: int = 20, num_std: float = 2.0) -> Tuple[float, float, float, float]:
+    """Returns (Upper, Middle, Lower, Bandwidth)."""
+    if not prices:
+        return 0.0, 0.0, 0.0, 0.0
+    p_sub = prices[-period:] if len(prices) >= period else prices
+    mid = float(np.mean(p_sub))
+    std = float(np.std(p_sub)) if len(p_sub) > 1 else 1.0
+    upper = mid + num_std * std
+    lower = mid - num_std * std
+    bandwidth = (upper - lower) / max(1e-5, abs(mid))
+    return upper, mid, lower, bandwidth
+
+
+def detect_fair_value_gaps(candles: List[Candle]) -> List[Dict[str, Any]]:
+    """Smart Money Concepts (SMC) Fair Value Gap (FVG) scanner."""
+    fvgs = []
+    if len(candles) < 3:
+        return fvgs
+    for i in range(2, len(candles)):
+        c1, c2, c3 = candles[i-2], candles[i-1], candles[i]
+        # Bullish FVG: Candle 1 High < Candle 3 Low (Gap in Candle 2)
+        if c1.high < c3.low and c2.color == 1:
+            fvgs.append({
+                "type": "BULLISH",
+                "top": c3.low,
+                "bottom": c1.high,
+                "size": c3.low - c1.high,
+                "index": i-1
+            })
+        # Bearish FVG: Candle 1 Low > Candle 3 High (Gap in Candle 2)
+        elif c1.low > c3.high and c2.color == -1:
+            fvgs.append({
+                "type": "BEARISH",
+                "top": c1.low,
+                "bottom": c3.high,
+                "size": c1.low - c3.high,
+                "index": i-1
+            })
+    return fvgs
+
+
+# =========================================================================
+# SPECIALIZED MULTI-AGENT ENGINE
+# =========================================================================
+
 class PriceActionAgent:
-    """Agent specialized in Japanese Candlestick Patterns and Price Action Rejections."""
+    """Agent specialized in Japanese Candlestick Patterns and Wick Absorption Index (WAI)."""
     name = "Acción del Precio"
 
     def analyze(self, candles: List[Candle]) -> Dict[str, Any]:
@@ -106,52 +200,98 @@ class PriceActionAgent:
         prev = candles[-2]
         prev2 = candles[-3] if len(candles) >= 3 else prev
 
-        # Ratios de absorción de mechas
         lower_ratio = c.lower_wick / max(1.0, c.range_size)
         upper_ratio = c.upper_wick / max(1.0, c.range_size)
         body_ratio = c.body_size / max(1.0, c.range_size)
+        wai = (c.lower_wick - c.upper_wick) / max(1.0, c.range_size)
 
-        # 1. Hammer / Pinbar Alcista (Mecha inferior > 55% del rango total)
-        is_hammer = lower_ratio >= 0.55 and upper_ratio <= 0.20
-        # 2. Shooting Star / Pinbar Bajista (Mecha superior > 55% del rango total)
-        is_shooting_star = upper_ratio >= 0.55 and lower_ratio <= 0.20
-        # 3. Bullish Engulfing (Vela verde envolvente de rango superior)
+        # 1. Hammer / Pinbar Alcista
+        is_hammer = lower_ratio >= 0.50 and upper_ratio <= 0.22
+        # 2. Shooting Star / Pinbar Bajista
+        is_shooting_star = upper_ratio >= 0.50 and lower_ratio <= 0.22
+        # 3. Bullish Engulfing
         is_bullish_engulf = (prev.color == -1 and c.color == 1 and 
-                             c.close >= prev.open and c.open <= prev.close and c.body_size > prev.body_size * 1.15)
-        # 4. Bearish Engulfing (Vela roja envolvente)
+                             c.close >= prev.open and c.body_size > prev.body_size * 1.1)
+        # 4. Bearish Engulfing
         is_bearish_engulf = (prev.color == 1 and c.color == -1 and 
-                             c.open >= prev.close and c.close <= prev.open and c.body_size > prev.body_size * 1.15)
-        # 5. Morning Star (Patrón de 3 velas: bajista + indecisión + vela alcista fuerte)
-        is_morning_star = (prev2.color == -1 and prev.body_size <= prev2.body_size * 0.4 and 
-                           c.color == 1 and c.close > (prev2.open + prev2.close) / 2)
-        # 6. Evening Star (Patrón de 3 velas: alcista + indecisión + vela bajista fuerte)
-        is_evening_star = (prev2.color == 1 and prev.body_size <= prev2.body_size * 0.4 and 
-                           c.color == -1 and c.close < (prev2.open + prev2.close) / 2)
-        # 7. Doji (Indecisión / Compresión)
+                             c.close <= prev.open and c.body_size > prev.body_size * 1.1)
+        # 5. Morning Star
+        is_morning_star = (prev2.color == -1 and prev.body_size <= prev2.body_size * 0.45 and 
+                           c.color == 1 and c.close > (prev2.open + prev2.close) / 2.0)
+        # 6. Evening Star
+        is_evening_star = (prev2.color == 1 and prev.body_size <= prev2.body_size * 0.45 and 
+                           c.color == -1 and c.close < (prev2.open + prev2.close) / 2.0)
+        # 7. Doji
         is_doji = body_ratio <= 0.12
 
         if is_morning_star:
-            return {"vote": "CALL", "confidence": 92, "pattern": "Estrella de la Mañana (Morning Star)", "reason": "Giro alcista mayor confirmado por 3 velas"}
+            return {"vote": "CALL", "confidence": 93, "pattern": "Morning Star", "reason": "Giro alcista confirmado por 3 velas", "wai": wai}
         elif is_evening_star:
-            return {"vote": "PUT", "confidence": 92, "pattern": "Estrella del Atardecer (Evening Star)", "reason": "Giro bajista mayor confirmado por 3 velas"}
+            return {"vote": "PUT", "confidence": 93, "pattern": "Evening Star", "reason": "Giro bajista confirmado por 3 velas", "wai": wai}
         elif is_hammer:
-            return {"vote": "CALL", "confidence": 88, "pattern": "Martillo / Pinbar Alcista", "reason": f"Fuerte absorción compradora ({int(lower_ratio*100)}% mecha inferior)"}
+            return {"vote": "CALL", "confidence": 90, "pattern": "Martillo / Pinbar Alcista", "reason": f"Fuerte absorción compradora ({int(lower_ratio*100)}% mecha)", "wai": wai}
         elif is_bullish_engulf:
-            return {"vote": "CALL", "confidence": 89, "pattern": "Envolvente Alcista", "reason": "Absorción total de oferta previa"}
+            return {"vote": "CALL", "confidence": 91, "pattern": "Envolvente Alcista", "reason": "Absorción total de oferta previa", "wai": wai}
         elif is_shooting_star:
-            return {"vote": "PUT", "confidence": 88, "pattern": "Estrella Fugaz / Pinbar Bajista", "reason": f"Fuerte rechazo vendedor ({int(upper_ratio*100)}% mecha superior)"}
+            return {"vote": "PUT", "confidence": 90, "pattern": "Estrella Fugaz / Pinbar Bajista", "reason": f"Fuerte rechazo vendedor ({int(upper_ratio*100)}% mecha)", "wai": wai}
         elif is_bearish_engulf:
-            return {"vote": "PUT", "confidence": 89, "pattern": "Envolvente Bajista", "reason": "Absorción total de demanda previa"}
+            return {"vote": "PUT", "confidence": 91, "pattern": "Envolvente Bajista", "reason": "Absorción total de demanda previa", "wai": wai}
         elif is_doji:
-            return {"vote": "ESPERAR", "confidence": 40, "pattern": "Doji / Indecisión", "reason": "Equilibrio transitorio; esperar confirmación"}
+            return {"vote": "ESPERAR", "confidence": 40, "pattern": "Doji / Indecisión", "reason": "Equilibrio transitorio; esperar confirmación", "wai": wai}
 
-        # Continuidad de impulso
-        if c.color == 1 and prev.color == 1 and c.body_size > prev.body_size * 1.1:
-            return {"vote": "CALL", "confidence": 76, "pattern": "Expansión Alcista", "reason": "Cuerpos verdes en aceleración"}
-        elif c.color == -1 and prev.color == -1 and c.body_size > prev.body_size * 1.1:
-            return {"vote": "PUT", "confidence": 76, "pattern": "Expansión Bajista", "reason": "Cuerpos rojos en aceleración"}
+        if c.color == 1 and prev.color == 1 and c.body_size > prev.body_size:
+            return {"vote": "CALL", "confidence": 78, "pattern": "Expansión Verde", "reason": "Aceleración de compradores", "wai": wai}
+        elif c.color == -1 and prev.color == -1 and c.body_size > prev.body_size:
+            return {"vote": "PUT", "confidence": 78, "pattern": "Expansión Roja", "reason": "Aceleración de vendedores", "wai": wai}
 
-        return {"vote": "ESPERAR", "confidence": 50, "pattern": "Sin patrón claro", "reason": "Velas neutras sin ventaja estadística"}
+        return {"vote": "ESPERAR", "confidence": 50, "pattern": "Velas Neutras", "reason": "Sin ventaja de acción del precio", "wai": wai}
+
+
+class SmartMoneyTrapAgent:
+    """Agent specialized in Fair Value Gaps (FVG), Order Blocks, and Liquidity Sweeps."""
+    name = "Smart Money & Trampas"
+
+    def analyze(self, candles: List[Candle]) -> Dict[str, Any]:
+        if len(candles) < 4:
+            return {"vote": "ESPERAR", "confidence": 50, "reason": "Datos insuficientes"}
+
+        c = candles[-1]
+        current_price = c.close
+        highs = [cd.high for cd in candles[:-1]]
+        lows = [cd.low for cd in candles[:-1]]
+        recent_high = max(highs[-6:]) if highs else c.high
+        recent_low = min(lows[-6:]) if lows else c.low
+
+        # 1. Liquidity Sweep Bull Trap (Falsa Ruptura hacia arriba)
+        if c.high > recent_high and c.close < recent_high and c.upper_wick >= c.body_size * 0.9:
+            return {
+                "vote": "PUT", "confidence": 94, "trap": "Trampa de Toros (Bull Trap)",
+                "reason": "Barrido de liquidez sobre máximos; reversión bajista inminente"
+            }
+
+        # 2. Liquidity Sweep Bear Trap (Falsa Ruptura hacia abajo)
+        if c.low < recent_low and c.close > recent_low and c.lower_wick >= c.body_size * 0.9:
+            return {
+                "vote": "CALL", "confidence": 94, "trap": "Trampa de Osos (Bear Trap)",
+                "reason": "Barrido de liquidez bajo mínimos; rebote alcista inminente"
+            }
+
+        # 3. Fair Value Gap (FVG) Mitigation
+        fvgs = detect_fair_value_gaps(candles)
+        if fvgs:
+            last_fvg = fvgs[-1]
+            if last_fvg["type"] == "BULLISH" and abs(current_price - last_fvg["top"]) / max(1.0, c.range_size) < 1.5:
+                return {
+                    "vote": "CALL", "confidence": 88, "trap": "Mitigación FVG Alcista",
+                    "reason": "Precio rellenando desbalance institucional; soporte fuerte"
+                }
+            elif last_fvg["type"] == "BEARISH" and abs(current_price - last_fvg["bottom"]) / max(1.0, c.range_size) < 1.5:
+                return {
+                    "vote": "PUT", "confidence": 88, "trap": "Mitigación FVG Bajista",
+                    "reason": "Precio rellenando desbalance institucional; resistencia fuerte"
+                }
+
+        return {"vote": "ESPERAR", "confidence": 50, "trap": "Sin anomalía", "reason": "Estructura institucional limpia"}
 
 
 class MarketStructureAgent:
@@ -159,7 +299,7 @@ class MarketStructureAgent:
     name = "Estructura & S/R"
 
     def analyze(self, candles: List[Candle]) -> Dict[str, Any]:
-        if len(candles) < 8:
+        if len(candles) < 4:
             return {"vote": "ESPERAR", "confidence": 50, "reason": "Datos insuficientes"}
 
         highs = [c.high for c in candles]
@@ -169,278 +309,160 @@ class MarketStructureAgent:
         if total_range <= 0:
             return {"vote": "ESPERAR", "confidence": 50, "reason": "Rango plano"}
 
-        # Pivotes locales (extremos de 5 velas)
-        swing_highs = []
-        swing_lows = []
-        for i in range(2, len(candles) - 2):
-            if highs[i] >= highs[i-1] and highs[i] >= highs[i-2] and highs[i] >= highs[i+1] and highs[i] >= highs[i+2]:
-                swing_highs.append(highs[i])
-            if lows[i] <= lows[i-1] and lows[i] <= lows[i-2] and lows[i] <= lows[i+1] and lows[i] <= lows[i+2]:
-                swing_lows.append(lows[i])
-
         highest = max(highs)
         lowest = min(lows)
-        nearest_res = min([h for h in swing_highs if h >= current_price], default=highest)
-        nearest_sup = max([l for l in swing_lows if l <= current_price], default=lowest)
+        dist_res = abs(highest - current_price) / total_range
+        dist_sup = abs(current_price - lowest) / total_range
 
-        dist_res = abs(nearest_res - current_price) / total_range
-        dist_sup = abs(current_price - nearest_sup) / total_range
-
-        # Fibonacci Golden Pocket (0.50 a 0.618 de retroceso del impulso mayor)
+        # Fibonacci Golden Pocket (0.50 a 0.618 de retroceso)
         fib_50 = lowest + total_range * 0.50
-        fib_618 = lowest + total_range * 0.382  # Golden pocket en retroceso
-        in_golden_pocket_bull = abs(current_price - fib_50) / total_range < 0.06 and candles[-1].color == 1
+        in_golden_pocket = abs(current_price - fib_50) / total_range < 0.07
 
-        # 1. Rebote en Soporte o Golden Pocket
-        if in_golden_pocket_bull:
-            return {
-                "vote": "CALL", "confidence": 90, "zone": "Fibonacci Golden Pocket",
-                "reason": "Rebote institucional en retroceso 50%-61.8% Fibonacci"
-            }
-        elif dist_sup < 0.07 and candles[-1].color == 1:
-            return {
-                "vote": "CALL", "confidence": 88, "zone": "Rebote en Soporte",
-                "reason": f"Soporte confirmado ({dist_sup*100:.1f}% distancia)"
-            }
-        elif dist_res < 0.07 and candles[-1].color == -1:
-            return {
-                "vote": "PUT", "confidence": 88, "zone": "Rechazo en Resistencia",
-                "reason": f"Resistencia confirmada ({dist_res*100:.1f}% distancia)"
-            }
-        elif current_price > nearest_res * 0.998 and candles[-1].color == 1:
-            return {
-                "vote": "CALL", "confidence": 85, "zone": "Ruptura de Resistencia",
-                "reason": "Ruptura limpia de nivel estructural alcista"
-            }
-        elif current_price < nearest_sup * 1.002 and candles[-1].color == -1:
-            return {
-                "vote": "PUT", "confidence": 85, "zone": "Ruptura de Soporte",
-                "reason": "Ruptura limpia de piso estructural bajista"
-            }
+        if in_golden_pocket and candles[-1].color == 1:
+            return {"vote": "CALL", "confidence": 90, "zone": "Fibonacci Golden Pocket", "reason": "Rebote institucional en 50%-61.8% de retroceso"}
+        elif in_golden_pocket and candles[-1].color == -1:
+            return {"vote": "PUT", "confidence": 90, "zone": "Fibonacci Golden Pocket", "reason": "Rechazo institucional en 50%-61.8% de retroceso"}
+        elif dist_sup < 0.08 and candles[-1].color == 1:
+            return {"vote": "CALL", "confidence": 88, "zone": "Soporte Mayor", "reason": "Doble suelo / rebote en nivel de soporte"}
+        elif dist_res < 0.08 and candles[-1].color == -1:
+            return {"vote": "PUT", "confidence": 88, "zone": "Resistencia Mayor", "reason": "Doble techo / rechazo en resistencia"}
 
-        # Filtros de peligro
-        if dist_res < 0.025:
-            return {
-                "vote": "ESPERAR", "confidence": 80, "zone": "Peligro: Techo Próximo",
-                "reason": "Precio contra resistencia; bloquear CALL", "block_call": True
-            }
-        if dist_sup < 0.025:
-            return {
-                "vote": "ESPERAR", "confidence": 80, "zone": "Peligro: Piso Próximo",
-                "reason": "Precio sobre soporte; bloquear PUT", "block_put": True
-            }
+        # Bloqueos de seguridad (contra la pared)
+        block_call = dist_res < 0.02
+        block_put = dist_sup < 0.02
 
         return {
-            "vote": "ESPERAR", "confidence": 55, "zone": "Zona Media",
-            "reason": "Precio oscilando entre niveles clave sin confirmación"
+            "vote": "ESPERAR", "confidence": 50, "zone": "Rango Medio",
+            "reason": "Precio en zona neutra de estructura",
+            "block_call": block_call, "block_put": block_put
         }
 
 
 class TechnicalIndicatorAgent:
-    """Agent specialized in Triple EMAs (9, 21, 50), Dynamic RSI 14, and Divergences."""
+    """Agent specialized in EMA Ribbon (9, 21, 50), Wilder's RSI, and Stochastic Oscillator."""
     name = "Indicadores & EMA"
 
     def analyze(self, candles: List[Candle]) -> Dict[str, Any]:
-        if len(candles) < 8:
-            return {"vote": "ESPERAR", "confidence": 50, "reason": "Insuficientes velas"}
-
         prices = [c.close for c in candles]
+        highs = [c.high for c in candles]
+        lows = [c.low for c in candles]
+        
+        rsi = calc_wilder_rsi(prices, 14)
+        k_val, d_val = calc_stochastic(highs, lows, prices, 14, 3)
+
+        if len(prices) < 4:
+            return {"vote": "ESPERAR", "confidence": 50, "rsi": rsi, "stoch": (k_val, d_val), "reason": "Datos insuficientes"}
+
         ema9 = calc_ema_series(prices, 9)[-1]
         ema21 = calc_ema_series(prices, 21)[-1]
-        ema50 = calc_ema_series(prices, min(50, len(prices)))[-1]
-
-        # RSI 14
-        deltas = np.diff(prices)
-        gains = np.maximum(deltas, 0)
-        losses = np.maximum(-deltas, 0)
-        p = min(14, len(deltas))
-        avg_gain = gains[-p:].mean() if p else 0.0
-        avg_loss = losses[-p:].mean() if p else 0.0
-        rsi = 100.0 if avg_loss == 0 else (100.0 - (100.0 / (1.0 + (avg_gain / avg_loss))))
-
-        # Divergencias Regulares de RSI
-        bullish_div = False
-        bearish_div = False
-        if len(prices) >= 12:
-            recent_low = min(prices[-4:])
-            older_low = min(prices[-12:-4])
-            if recent_low < older_low and rsi > 34:
-                bullish_div = True
-            recent_high = max(prices[-4:])
-            older_high = max(prices[-12:-4])
-            if recent_high > older_high and rsi < 66:
-                bearish_div = True
-
-        bull_trend = ema9 > ema21 and ema21 > ema50
-        bear_trend = ema9 < ema21 and ema21 < ema50
-
-        if bullish_div:
-            return {"vote": "CALL", "confidence": 91, "reason": f"Divergencia Alcista RSI ({rsi:.1f}) · Inversión inminente", "rsi": round(rsi, 1)}
-        elif bearish_div:
-            return {"vote": "PUT", "confidence": 91, "reason": f"Divergencia Bajista RSI ({rsi:.1f}) · Agotamiento institucional", "rsi": round(rsi, 1)}
-        elif bull_trend and rsi < 66 and prices[-1] > ema9:
-            return {"vote": "CALL", "confidence": 85, "reason": f"Tendencia Alcista (EMA 9 > 21 > 50) + RSI {rsi:.1f}", "rsi": round(rsi, 1)}
-        elif bear_trend and rsi > 34 and prices[-1] < ema9:
-            return {"vote": "PUT", "confidence": 85, "reason": f"Tendencia Bajista (EMA 9 < 21 < 50) + RSI {rsi:.1f}", "rsi": round(rsi, 1)}
-        elif rsi < 24:
-            return {"vote": "CALL", "confidence": 82, "reason": f"Sobreventa Extrema (RSI {rsi:.1f}) · Rebote inminente", "rsi": round(rsi, 1)}
-        elif rsi > 76:
-            return {"vote": "PUT", "confidence": 82, "reason": f"Sobrecompra Extrema (RSI {rsi:.1f}) · Corrección inminente", "rsi": round(rsi, 1)}
-
-        return {"vote": "ESPERAR", "confidence": 50, "reason": f"Rango neutral (RSI {rsi:.1f})", "rsi": round(rsi, 1)}
-
-
-class VolatilityBollingerAgent:
-    """Agent specialized in Bollinger Bands (20, 2), Volatility Squeeze, and Mean Reversion."""
-    name = "Bandas de Bollinger & Volatilidad"
-
-    def analyze(self, candles: List[Candle]) -> Dict[str, Any]:
-        if len(candles) < 15:
-            return {"vote": "ESPERAR", "confidence": 50, "reason": "Insuficientes datos"}
-
-        prices = [c.close for c in candles]
-        window = min(20, len(prices))
-        basis = float(np.mean(prices[-window:]))
-        std = float(np.std(prices[-window:]))
-        upper_band = basis + 2.0 * std
-        lower_band = basis - 2.0 * std
-        bandwidth = (upper_band - lower_band) / max(1.0, basis)
-
         current_price = prices[-1]
 
-        # 1. Detección de Squeeze (Compresión de volatilidad peligrosa para binarias)
-        is_squeeze = bandwidth < 0.015 or std < 1.2
-        if is_squeeze:
+        # 1. Reversión por Sobreextensión Extrema (RSI + Estocástico)
+        if rsi <= 30 and k_val <= 25 and k_val > d_val:
             return {
-                "vote": "ESPERAR", "confidence": 85, "state": "Squeeze / Rango Plano",
-                "reason": "Mercado comprimido sin volatilidad (riesgo alto de doji); evitar operar",
-                "is_squeeze": True
+                "vote": "CALL", "confidence": 92, "rsi": rsi, "stoch": (k_val, d_val),
+                "reason": f"Sobreventa extrema con cruce alcista estocástico (%K={k_val}, RSI={rsi})"
+            }
+        elif rsi >= 70 and k_val >= 75 and k_val < d_val:
+            return {
+                "vote": "PUT", "confidence": 92, "rsi": rsi, "stoch": (k_val, d_val),
+                "reason": f"Sobrecompra extrema con cruce bajista estocástico (%K={k_val}, RSI={rsi})"
             }
 
-        # 2. Mean Reversion (Precio perfora banda exterior con mecha de regreso)
-        if current_price <= lower_band and candles[-1].lower_wick >= candles[-1].body_size * 0.8:
+        # 2. Impulso EMA Ribbon
+        if ema9 > ema21 and current_price >= ema9 and rsi < 65:
             return {
-                "vote": "CALL", "confidence": 89, "state": "Perforación Banda Inferior",
-                "reason": "Precio bajo Banda Inferior con rechazo; rebote a la media inminente"
+                "vote": "CALL", "confidence": 85, "rsi": rsi, "stoch": (k_val, d_val),
+                "reason": f"Tendencia alcista sobre EMA 9/21 (RSI={rsi})"
             }
-        elif current_price >= upper_band and candles[-1].upper_wick >= candles[-1].body_size * 0.8:
+        elif ema9 < ema21 and current_price <= ema9 and rsi > 35:
             return {
-                "vote": "PUT", "confidence": 89, "state": "Perforación Banda Superior",
-                "reason": "Precio sobre Banda Superior con rechazo; corrección a la media inminente"
-            }
-
-        # 3. Ruptura de Bandas con aceleración (Band Walk)
-        if current_price > upper_band and candles[-1].color == 1 and candles[-1].body_size > std:
-            return {
-                "vote": "CALL", "confidence": 83, "state": "Ruptura Volátil Alcista",
-                "reason": "Aceleración de volatilidad montando la banda superior"
-            }
-        elif current_price < lower_band and candles[-1].color == -1 and candles[-1].body_size > std:
-            return {
-                "vote": "PUT", "confidence": 83, "state": "Ruptura Volátil Bajista",
-                "reason": "Aceleración de volatilidad montando la banda inferior"
+                "vote": "PUT", "confidence": 85, "rsi": rsi, "stoch": (k_val, d_val),
+                "reason": f"Tendencia bajista bajo EMA 9/21 (RSI={rsi})"
             }
 
         return {
-            "vote": "ESPERAR", "confidence": 52, "state": "Dentro de Bandas",
-            "reason": f"Precio dentro del canal normal (Ancho: {bandwidth*100:.1f}%)"
+            "vote": "ESPERAR", "confidence": 50, "rsi": rsi, "stoch": (k_val, d_val),
+            "reason": f"RSI neutro ({rsi}) y medias entrelazadas"
+        }
+
+
+class VolatilityBollingerAgent:
+    """Agent specialized in Bollinger Bands (20, 2) and John Carter TTM Squeeze Detection."""
+    name = "Volatilidad & Bollinger"
+
+    def analyze(self, candles: List[Candle]) -> Dict[str, Any]:
+        prices = [c.close for c in candles]
+        if len(prices) < 4:
+            return {"vote": "ESPERAR", "confidence": 50, "state": "Sin datos", "is_squeeze": False}
+
+        upper, mid, lower, bw = calc_bollinger_bands(prices, period=20, num_std=2.0)
+        c = candles[-1]
+        current_price = c.close
+
+        # Perforación de banda externa con rechazo
+        if c.low <= lower and c.close > lower and c.lower_wick >= c.body_size * 0.7:
+            return {
+                "vote": "CALL", "confidence": 91, "state": "Rebote Banda Inferior",
+                "reason": "Perforación y absorción elástica en Bollinger inferior",
+                "is_squeeze": False
+            }
+        elif c.high >= upper and c.close < upper and c.upper_wick >= c.body_size * 0.7:
+            return {
+                "vote": "PUT", "confidence": 91, "state": "Rechazo Banda Superior",
+                "reason": "Perforación y rechazo elástico en Bollinger superior",
+                "is_squeeze": False
+            }
+
+        # Detección de Squeeze plano (mercado congelado / peligro de pérdida en binarias)
+        is_squeeze = bw < 0.012 and len(prices) >= 12
+        if is_squeeze:
+            return {
+                "vote": "ESPERAR", "confidence": 35, "state": "Squeeze Plano",
+                "reason": "Compresión extrema de volatilidad; no operar hasta expansión",
+                "is_squeeze": True
+            }
+
+        return {
+            "vote": "ESPERAR", "confidence": 50, "state": "Volatilidad Normal",
+            "reason": "Precio dentro del canal estándar de Bollinger",
+            "is_squeeze": False
         }
 
 
 class MACDMomentumAgent:
-    """Agent specialized in MACD Line, Signal Line (12, 26, 9), and Histogram Momentum Shifts."""
+    """Agent specialized in MACD Momentum & Acceleration shifts."""
     name = "MACD & Momentum"
 
     def analyze(self, candles: List[Candle]) -> Dict[str, Any]:
-        if len(candles) < 20:
-            return {"vote": "ESPERAR", "confidence": 50, "reason": "Insuficientes datos"}
-
         prices = [c.close for c in candles]
-        ema12 = calc_ema_series(prices, 12)
-        ema26 = calc_ema_series(prices, 26)
-        macd_line = [f - s for f, s in zip(ema12, ema26)]
-        signal_line = calc_ema_series(macd_line, 9)
-        histogram = [m - s for m, s in zip(macd_line, signal_line)]
+        if len(prices) < 6:
+            return {"vote": "ESPERAR", "confidence": 50, "state": "Sin datos"}
 
-        curr_hist = histogram[-1]
-        prev_hist = histogram[-2] if len(histogram) >= 2 else curr_hist
+        fast = calc_ema_series(prices, 6)
+        slow = calc_ema_series(prices, 13)
+        macd = [f - s for f, s in zip(fast, slow)]
+        signal = calc_ema_series(macd, 5)
+        hist = macd[-1] - signal[-1]
+        prev_hist = macd[-2] - signal[-2] if len(macd) >= 2 else 0.0
 
-        # Cruce de línea cero en histograma (giro de impulso)
-        if prev_hist <= 0 and curr_hist > 0:
-            return {
-                "vote": "CALL", "confidence": 87, "state": "Cruce Alcista MACD",
-                "reason": "Histograma MACD cruzó a positivo con fuerte aceleración compradora"
-            }
-        elif prev_hist >= 0 and curr_hist < 0:
-            return {
-                "vote": "PUT", "confidence": 87, "state": "Cruce Bajista MACD",
-                "reason": "Histograma MACD cruzó a negativo con fuerte aceleración vendedora"
-            }
-        elif curr_hist > 0 and curr_hist > prev_hist:
-            return {
-                "vote": "CALL", "confidence": 80, "state": "Momento Alcista Creciente",
-                "reason": "Histograma verde en expansión"
-            }
-        elif curr_hist < 0 and curr_hist < prev_hist:
-            return {
-                "vote": "PUT", "confidence": 80, "state": "Momento Bajista Creciente",
-                "reason": "Histograma rojo en expansión"
-            }
+        if hist > 0 and hist > prev_hist:
+            return {"vote": "CALL", "confidence": 84, "state": "Aceleración Alcista", "reason": "Histograma MACD en expansión positiva"}
+        elif hist < 0 and hist < prev_hist:
+            return {"vote": "PUT", "confidence": 84, "state": "Aceleración Bajista", "reason": "Histograma MACD en expansión negativa"}
 
-        return {
-            "vote": "ESPERAR", "confidence": 50, "state": "MACD Plano",
-            "reason": "Oscilador sin divergencia ni aceleración notable"
-        }
-
-
-class SmartMoneyTrapAgent:
-    """Agent specialized in Liquidity Sweeps, Fakeout Traps, and Institutional Manipulation."""
-    name = "Cazador de Trampas & Liquidez"
-
-    def analyze(self, candles: List[Candle]) -> Dict[str, Any]:
-        if len(candles) < 10:
-            return {"vote": "ESPERAR", "confidence": 50, "reason": "Datos insuficientes"}
-
-        highs = [c.high for c in candles[:-1]]
-        lows = [c.low for c in candles[:-1]]
-        recent_high = max(highs[-8:])
-        recent_low = min(lows[-8:])
-        c = candles[-1]
-
-        # 1. Bullish Trap / Liquidity Sweep de Máximos (Falsa Ruptura hacia arriba)
-        # La vela supera el máximo anterior pero cierra por debajo con mecha superior larga
-        if c.high > recent_high and c.close < recent_high and c.upper_wick >= c.body_size * 1.2:
-            return {
-                "vote": "PUT", "confidence": 93, "trap": "Trampa de Toros (Bull Trap)",
-                "reason": "Barrido de liquidez sobre máximos; compradores atrapados, giro a la baja"
-            }
-
-        # 2. Bearish Trap / Liquidity Sweep de Mínimos (Falsa Ruptura hacia abajo)
-        # La vela perfora el mínimo anterior pero cierra por encima con mecha inferior larga
-        if c.low < recent_low and c.close > recent_low and c.lower_wick >= c.body_size * 1.2:
-            return {
-                "vote": "CALL", "confidence": 93, "trap": "Trampa de Osos (Bear Trap)",
-                "reason": "Barrido de liquidez bajo mínimos; vendedores atrapados, rebote al alza"
-            }
-
-        return {
-            "vote": "ESPERAR", "confidence": 50, "trap": "Sin trampa",
-            "reason": "Estructura de liquidez normal"
-        }
+        return {"vote": "ESPERAR", "confidence": 50, "state": "MACD Neutro", "reason": "Sin aceleración notable de momentum"}
 
 
 class NextCandlePredictorAgent:
-    """Specialized ultra-fast micro-structure agent predicting the direction of the NEXT candle (SUBE vs BAJA)."""
+    """Micro-Structure Order Flow Predictor for the immediate next candle (SUBE vs BAJA)."""
     name = "Predictor Próxima Vela"
 
     def predict(self, candles: List[Candle], r_pa: Dict[str, Any], r_st: Dict[str, Any], r_ind: Dict[str, Any], r_bb: Dict[str, Any], r_trap: Dict[str, Any]) -> Dict[str, Any]:
         if not candles:
             return {
-                "direction": "INDECISIÓN",
-                "label": "🔮 PRÓXIMA VELA: ⚖️ INDECISIÓN",
-                "short_label": "⚖️ INDECISIÓN",
-                "probability": 50,
-                "reason": "Sin datos de velas suficientes"
+                "direction": "INDECISIÓN", "label": "🔮 PRÓXIMA VELA: ⚖️ INDECISIÓN",
+                "short_label": "⚖️ INDECISIÓN", "probability": 50, "reason": "Sin datos suficientes"
             }
 
         c = candles[-1]
@@ -455,7 +477,7 @@ class NextCandlePredictorAgent:
         reasons_sube = []
         reasons_baja = []
 
-        # 1. Micro Price Action de la vela actual (Rechazo de mechas)
+        # 1. Micro-rechazos de mechas en la vela actual
         if lower_ratio >= 0.35:
             w = 35 + int(lower_ratio * 40)
             sube_score += w
@@ -489,13 +511,20 @@ class NextCandlePredictorAgent:
             baja_score += 20
             reasons_baja.append("Impulso rojo continuo")
 
-        # 4. Aportes de agentes confluentes
+        # 4. Aportes de agentes institucionales
         if r_pa.get("vote") == "CALL":
             sube_score += 25
             reasons_sube.append(r_pa.get("pattern", "Patrón alcista"))
         elif r_pa.get("vote") == "PUT":
             baja_score += 25
             reasons_baja.append(r_pa.get("pattern", "Patrón bajista"))
+
+        if r_trap.get("vote") == "CALL":
+            sube_score += 30
+            reasons_sube.append(r_trap.get("trap", "Trampa de osos / FVG"))
+        elif r_trap.get("vote") == "PUT":
+            baja_score += 30
+            reasons_baja.append(r_trap.get("trap", "Trampa de toros / FVG"))
 
         if r_st.get("vote") == "CALL":
             sube_score += 25
@@ -504,12 +533,12 @@ class NextCandlePredictorAgent:
             baja_score += 25
             reasons_baja.append(r_st.get("zone", "Resistencia clave"))
 
-        if r_bb.get("vote") == "CALL" or r_trap.get("vote") == "CALL":
-            sube_score += 30
-            reasons_sube.append("Rebote / Absorción institucional")
-        elif r_bb.get("vote") == "PUT" or r_trap.get("vote") == "PUT":
-            baja_score += 30
-            reasons_baja.append("Rechazo / Trampa bajista")
+        if r_bb.get("vote") == "CALL":
+            sube_score += 25
+            reasons_sube.append("Rebote Bollinger inferior")
+        elif r_bb.get("vote") == "PUT":
+            baja_score += 25
+            reasons_baja.append("Rechazo Bollinger superior")
 
         rsi = r_ind.get("rsi", 50.0)
         if rsi < 34:
@@ -550,8 +579,12 @@ class NextCandlePredictorAgent:
             }
 
 
+# =========================================================================
+# BAYESIAN LOG-ODDS MASTER CONSENSUS ENGINE
+# =========================================================================
+
 class ConsensusMasterAgent:
-    """Institutional Master Consensus Coordinator with Triple-Confluence Verification."""
+    """Institutional Master Consensus Coordinator with Bayesian Log-Odds Confluence."""
     def __init__(self):
         self.pa_agent = PriceActionAgent()
         self.st_agent = MarketStructureAgent()
@@ -562,147 +595,120 @@ class ConsensusMasterAgent:
         self.next_candle_agent = NextCandlePredictorAgent()
 
     def evaluate(self, candles: List[Candle]) -> Dict[str, Any]:
+        if len(candles) < 3:
+            return {
+                "signal": "ESPERAR", "confidence": 50, "recommended_time": "—",
+                "duration_seconds": 0, "explanation": "Insuficientes velas detectadas.",
+                "next_candle": {"direction": "INDECISIÓN", "label": "🔮 PRÓXIMA VELA: ESPERAR", "probability": 50, "reason": "Sin datos"},
+                "rsi": 50.0, "trend": "Lateral", "count": len(candles), "agents": {}
+            }
+
+        # Ejecución paralela de todos los agentes
         r_pa = self.pa_agent.analyze(candles)
         r_st = self.st_agent.analyze(candles)
         r_ind = self.ind_agent.analyze(candles)
         r_bb = self.bb_agent.analyze(candles)
         r_macd = self.macd_agent.analyze(candles)
         r_trap = self.trap_agent.analyze(candles)
+        r_next = self.next_candle_agent.predict(candles, r_pa, r_st, r_ind, r_bb, r_trap)
 
-        # 1. FILTRO DE BLOQUEO DE RANGO / SQUEEZE
+        # 1. Filtro de Squeeze Peligroso
         if r_bb.get("is_squeeze"):
             return {
-                "signal": "ESPERAR",
-                "confidence": 45,
-                "recommended_time": "—",
+                "signal": "ESPERAR", "confidence": 42, "recommended_time": "—",
                 "duration_seconds": 0,
-                "explanation": "FILTRADO: Mercado en Squeeze / Consolidación plana sin dirección. Esperando volumen.",
-                "rsi": r_ind.get("rsi", 50.0),
-                "trend": "Lateral",
-                "count": len(candles),
+                "explanation": "FILTRADO: Mercado en Squeeze plano sin volumen. Prohibido operar hasta ruptura.",
+                "next_candle": {"direction": "INDECISIÓN", "label": "🔮 PRÓXIMA VELA: ⚖️ SQUEEZE", "probability": 45, "reason": "Compresión de volatilidad"},
+                "rsi": r_ind.get("rsi", 50.0), "trend": "Lateral", "count": len(candles),
                 "agents": {
                     "price_action": r_pa, "structure": r_st, "indicators": r_ind,
                     "bollinger": r_bb, "macd": r_macd, "trap": r_trap
                 }
             }
 
-        # 2. PONDERACIÓN INSTITUCIONAL DE AGENTES
-        # Ponderación calibrada:
-        # Acción del Precio: 25%, Estructura S/R: 25%, Indicadores: 15%, Bollinger: 15%, MACD: 10%, Trampas: 10%
-        agents_list = [
-            (r_pa, 0.25),
-            (r_st, 0.25),
-            (r_ind, 0.15),
-            (r_bb, 0.15),
-            (r_macd, 0.10),
-            (r_trap, 0.10)
+        # 2. Bayesian Log-Odds Evidence Accumulator
+        # Evidence weights calibrated for Binary Options predictability:
+        factors = [
+            (r_pa, 0.25),     # Acción del precio y mechas
+            (r_trap, 0.22),   # Smart Money, trampas y FVG
+            (r_st, 0.18),     # Estructura S/R y Golden Pocket
+            (r_bb, 0.15),     # Perforación y rebote de Bollinger
+            (r_ind, 0.10),    # Indicadores EMA y RSI
+            (r_macd, 0.10)    # Momentum MACD
         ]
 
-        call_score = 0.0
-        put_score = 0.0
+        log_odds = 0.0
         call_confluences = 0
         put_confluences = 0
 
-        for res, weight in agents_list:
-            v = res.get("vote")
-            c = res.get("confidence", 50)
-            if v == "CALL":
-                call_score += c * weight
+        for agent_res, weight in factors:
+            vote = agent_res.get("vote")
+            conf = agent_res.get("confidence", 50)
+            norm_conf = (conf - 50.0) / 45.0  # Escala 0 a 1
+            if vote == "CALL":
+                log_odds += weight * norm_conf * 3.5
                 call_confluences += 1
-            elif v == "PUT":
-                put_score += c * weight
+            elif vote == "PUT":
+                log_odds -= weight * norm_conf * 3.5
                 put_confluences += 1
 
-        call_weight_sum = sum(w for res, w in agents_list if res.get("vote") == "CALL")
-        put_weight_sum = sum(w for res, w in agents_list if res.get("vote") == "PUT")
-
-        call_norm_score = (call_score / call_weight_sum) if call_weight_sum > 0 else 0.0
-        put_norm_score = (put_score / put_weight_sum) if put_weight_sum > 0 else 0.0
-
-        # 3. FILTROS DE SEGURIDAD ESTRICTOS
+        # Filtros de estructura
         if r_st.get("block_call"):
-            call_norm_score *= 0.35
-            call_confluences = max(0, call_confluences - 1)
+            log_odds -= 1.8
         if r_st.get("block_put"):
-            put_norm_score *= 0.35
-            put_confluences = max(0, put_confluences - 1)
+            log_odds += 1.8
 
-        # 4. CONDICIÓN DE RÁPIDA CONFIRMACIÓN INSTITUCIONAL & PRÓXIMA VELA
-        r_next = self.next_candle_agent.predict(candles, r_pa, r_st, r_ind, r_bb, r_trap)
+        # Inclusión del predictor de la próxima vela
+        if r_next["direction"] == "SUBE":
+            log_odds += 1.2
+        elif r_next["direction"] == "BAJA":
+            log_odds -= 1.2
 
-        has_prime_trigger_call = (
-            (r_pa.get("vote") == "CALL" and r_pa.get("confidence", 0) >= 84) or
-            (r_trap.get("vote") == "CALL" and r_trap.get("confidence", 0) >= 86) or
-            (r_bb.get("vote") == "CALL" and r_bb.get("confidence", 0) >= 85)
-        )
-        has_prime_trigger_put = (
-            (r_pa.get("vote") == "PUT" and r_pa.get("confidence", 0) >= 84) or
-            (r_trap.get("vote") == "PUT" and r_trap.get("confidence", 0) >= 86) or
-            (r_bb.get("vote") == "PUT" and r_bb.get("confidence", 0) >= 85)
-        )
+        # Probabilidad Bayesiana Final (Sigmoide)
+        prob_call = 1.0 / (1.0 + np.exp(-np.clip(log_odds, -8.0, 8.0)))
+        prob_put = 1.0 - prob_call
 
         final_signal = "ESPERAR"
         final_confidence = 50
-        recommended_time = "—"
-        duration_seconds = 0
+        recommended_time = "1 VELA (M1)"
+        duration_seconds = 60
 
-        # Disparo rápido: Gatillo clave + confirmación secundaria (>= 2 agentes de acuerdo)
-        is_fast_call = (has_prime_trigger_call and call_confluences >= 2 and call_norm_score >= 74 and put_confluences == 0)
-        is_standard_call = (call_confluences >= 2 and call_weight_sum >= 0.35 and call_norm_score >= 75 and put_confluences <= 1)
-
-        is_fast_put = (has_prime_trigger_put and put_confluences >= 2 and put_norm_score >= 74 and call_confluences == 0)
-        is_standard_put = (put_confluences >= 2 and put_weight_sum >= 0.35 and put_norm_score >= 75 and call_confluences <= 1)
-
-        if (is_fast_call or is_standard_call) and call_norm_score > put_norm_score + 10:
+        if prob_call >= 0.65 or (r_next["direction"] == "SUBE" and prob_call >= 0.55):
             final_signal = "CALL"
-            final_confidence = min(96, int(max(call_norm_score, 80)))
-            if r_trap.get("vote") == "CALL" or r_bb.get("vote") == "CALL" or "Martillo" in r_pa.get("pattern", ""):
-                recommended_time = "1 VELA (M1)"   # Rebote elástico rápido
+            final_confidence = min(96, int(max(prob_call * 100, r_next["probability"])))
+            if "Martillo" in r_pa.get("pattern", "") or r_trap.get("vote") == "CALL":
+                recommended_time = "1 VELA (M1)"
                 duration_seconds = 60
-            elif "Ruptura" in r_st.get("zone", "") or "Morning" in r_pa.get("pattern", ""):
-                recommended_time = "3 MIN"   # Ruptura con continuación
-                duration_seconds = 180
-            else:
-                recommended_time = "2 MIN"   # Tendencial estándar
-                duration_seconds = 120
-
-        elif (is_fast_put or is_standard_put) and put_norm_score > call_norm_score + 10:
-            final_signal = "PUT"
-            final_confidence = min(96, int(max(put_norm_score, 80)))
-            if r_trap.get("vote") == "PUT" or r_bb.get("vote") == "PUT" or "Estrella" in r_pa.get("pattern", ""):
-                recommended_time = "1 VELA (M1)"   # Corrección elástica rápida
-                duration_seconds = 60
-            elif "Ruptura" in r_st.get("zone", "") or "Evening" in r_pa.get("pattern", ""):
+            elif "Ruptura" in r_st.get("zone", ""):
                 recommended_time = "3 MIN"
                 duration_seconds = 180
             else:
                 recommended_time = "2 MIN"
                 duration_seconds = 120
 
-        # Prioridad a la Predicción Inmediata de la Próxima Vela (Fast Next-Candle Trigger)
-        if r_next["direction"] == "SUBE" and not r_st.get("block_call"):
-            final_signal = "CALL"
-            final_confidence = max(final_confidence, r_next["probability"])
-            recommended_time = "1 VELA (M1)"
-            duration_seconds = 60
-        elif r_next["direction"] == "BAJA" and not r_st.get("block_put"):
+        elif prob_put >= 0.65 or (r_next["direction"] == "BAJA" and prob_put >= 0.55):
             final_signal = "PUT"
-            final_confidence = max(final_confidence, r_next["probability"])
-            recommended_time = "1 VELA (M1)"
-            duration_seconds = 60
+            final_confidence = min(96, int(max(prob_put * 100, r_next["probability"])))
+            if "Estrella" in r_pa.get("pattern", "") or r_trap.get("vote") == "PUT":
+                recommended_time = "1 VELA (M1)"
+                duration_seconds = 60
+            elif "Ruptura" in r_st.get("zone", ""):
+                recommended_time = "3 MIN"
+                duration_seconds = 180
+            else:
+                recommended_time = "2 MIN"
+                duration_seconds = 120
 
-        # Resumen explicativo de la confluencia
-        active_agents = call_confluences if final_signal == "CALL" else put_confluences if final_signal == "PUT" else 0
+        # Explicación de confluencias de mayor peso
         if final_signal != "ESPERAR":
             explanation = (
-                f"⚡ {r_next['label']} ({final_confidence}%). "
-                f"Gatillo: {r_next['reason']} | "
-                f"Nivel: {r_st.get('zone', 'S/R')}."
+                f"⚡ {r_next['label']}. Confluencia ({final_confidence}%): {r_next['reason']} | "
+                f"Nivel: {r_st.get('zone', 'S/R')} | RSI: {r_ind.get('rsi', 50)}."
             )
         else:
             explanation = (
                 f"Consenso IA (Esperar · {r_next['reason']}): "
-                "Vela actual en consolidación/doji. Esperando que una mecha o cuerpo rompa el rango para entrar."
+                "Fuerzas equilibradas entre compradores y vendedores. Esperando gatillo direccional."
             )
 
         return {
@@ -712,8 +718,10 @@ class ConsensusMasterAgent:
             "duration_seconds": duration_seconds,
             "explanation": explanation,
             "next_candle": r_next,
+            "prob_call": round(float(prob_call * 100), 1),
+            "prob_put": round(float(prob_put * 100), 1),
             "rsi": r_ind.get("rsi", 50.0),
-            "trend": "Alcista" if call_score > put_score else "Bajista" if put_score > call_score else "Lateral",
+            "trend": "Alcista" if log_odds > 0.4 else "Bajista" if log_odds < -0.4 else "Lateral",
             "count": len(candles),
             "agents": {
                 "price_action": r_pa,

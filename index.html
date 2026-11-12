@@ -693,26 +693,35 @@
         nextCandleReason = bajaReasons.slice(0, 2).join(" · ") || "Presión vendedora dominante";
       }
 
-      let finalSig = "ESPERAR", finalConf = 50, finalDurLabel = "—", finalDurSec = 0;
+      // ACUMULADOR BAYESIANO LOG-ODDS (PROBABILIDAD MATEMÁTICA)
+      let logOdds = 0;
+      agentVotes.forEach(a => {
+        const normConf = (a.c - 50) / 45;
+        if (a.v === "CALL") logOdds += a.w * normConf * 3.5;
+        else if (a.v === "PUT") logOdds -= a.w * normConf * 3.5;
+      });
 
-      if (nextCandleDir === "SUBE" && !blockCall) {
+      if (blockCall) logOdds -= 1.8;
+      if (blockPut) logOdds += 1.8;
+
+      if (nextCandleDir === "SUBE") logOdds += 1.2;
+      else if (nextCandleDir === "BAJA") logOdds -= 1.2;
+
+      const probCall = 1 / (1 + Math.exp(-Math.max(-8, Math.min(8, logOdds))));
+      const probPut = 1 - probCall;
+      const probCallPct = Math.round(probCall * 1000) / 10;
+      const probPutPct = Math.round(probPut * 1000) / 10;
+
+      let finalSig = "ESPERAR", finalConf = 50, finalDurLabel = "1 VELA (M1)", finalDurSec = 60;
+
+      if (probCall >= 0.65 || (nextCandleDir === "SUBE" && probCall >= 0.55)) {
         finalSig = "CALL";
-        finalConf = nextCandleProb;
+        finalConf = Math.min(96, Math.round(Math.max(probCall * 100, nextCandleProb)));
         finalDurLabel = "1 VELA (M1)";
         finalDurSec = 60;
-      } else if (nextCandleDir === "BAJA" && !blockPut) {
+      } else if (probPut >= 0.65 || (nextCandleDir === "BAJA" && probPut >= 0.55)) {
         finalSig = "PUT";
-        finalConf = nextCandleProb;
-        finalDurLabel = "1 VELA (M1)";
-        finalDurSec = 60;
-      } else if (callNorm > putNorm + 10 && !blockCall) {
-        finalSig = "CALL";
-        finalConf = Math.min(96, Math.round(Math.max(callNorm, 78)));
-        finalDurLabel = "1 VELA (M1)";
-        finalDurSec = 60;
-      } else if (putNorm > callNorm + 10 && !blockPut) {
-        finalSig = "PUT";
-        finalConf = Math.min(96, Math.round(Math.max(putNorm, 78)));
+        finalConf = Math.min(96, Math.round(Math.max(probPut * 100, nextCandleProb)));
         finalDurLabel = "1 VELA (M1)";
         finalDurSec = 60;
       }
@@ -726,15 +735,17 @@
       return {
         signal: finalSig,
         confidence: finalConf,
+        probCall: probCallPct,
+        probPut: probPutPct,
         recommendedTime: finalDurLabel,
         durationSeconds: finalDurSec,
         rsi: rsi,
-        trend: callNorm > putNorm ? "Alcista" : putNorm > callNorm ? "Bajista" : "Lateral",
+        trend: logOdds > 0.4 ? "Alcista" : logOdds < -0.4 ? "Bajista" : "Lateral",
         count: candles.length,
         nextCandle: { dir: nextCandleDir, label: nextCandleLabel, prob: nextCandleProb, reason: nextCandleReason },
         explanation: finalSig !== "ESPERAR"
-          ? `⚡ ${nextCandleLabel}. Gatillo: ${nextCandleReason} | Nivel: ${stDetail}.`
-          : `Consenso IA (Esperar · ${nextCandleReason}): Esperando confirmación para la próxima vela.`,
+          ? `⚡ ${nextCandleLabel}. Confluencia (${finalConf}%): ${nextCandleReason} | Nivel: ${stDetail}.`
+          : `Consenso IA (Esperar · ${nextCandleReason}): Fuerzas equilibradas. Esperando gatillo direccional.`,
         agents: {
           pa: { vote: paVote, detail: paDetail },
           st: { vote: stVote, detail: stDetail },
@@ -800,7 +811,7 @@
         durLabel = (durSec / 60) + " MIN";
       }
 
-      applySignal(evalRes.signal, evalRes.confidence, durLabel, durSec, evalRes.rsi, evalRes.trend, evalRes.count, evalRes.agents, evalRes.nextCandle);
+      applySignal(evalRes.signal, evalRes.confidence, durLabel, durSec, evalRes.rsi, evalRes.trend, evalRes.count, evalRes.agents, evalRes.nextCandle, evalRes.probCall, evalRes.probPut);
       infoBanner.innerText = evalRes.explanation;
     }
 
@@ -823,12 +834,16 @@
 
     let lastBeepSig = "";
 
-    function applySignal(sig, conf, durLabel, durSec, rsi, trend, count, agents, nextCandle) {
+    function applySignal(sig, conf, durLabel, durSec, rsi, trend, count, agents, nextCandle, probCall, probPut) {
       if (nextCandle) {
         nextCandleBadge.innerText = nextCandle.label;
       }
       signalText.innerText = sig === "CALL" ? "SUBIR (CALL)" : sig === "PUT" ? "BAJAR (PUT)" : "ESPERAR";
-      confidenceText.innerText = `Confianza: ${conf}%`;
+      if (probCall !== undefined && probPut !== undefined) {
+        confidenceText.innerText = `Probabilidad Bayesiana: ${conf}% · (🟢 ${probCall}% | 🔴 ${probPut}%)`;
+      } else {
+        confidenceText.innerText = `Confianza: ${conf}%`;
+      }
       rsiVal.innerText = rsi;
       trendVal.innerText = trend;
       candlesVal.innerText = count;

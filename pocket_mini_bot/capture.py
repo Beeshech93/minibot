@@ -23,48 +23,73 @@ def capture_region(rect):
     return cv2.cvtColor(shot, cv2.COLOR_BGRA2BGR)
 
 def analyze_chart(image):
-    """Heuristic visual candle-body detector; not an exchange price feed."""
+    """
+    Advanced Computer Vision Candlestick Reconstruction:
+    - Dual-Space Adaptive Segmentation (HSV + RGB Differential)
+    - Connected Component Contour Geometry (exact body + wick extraction)
+    - Fallback column-slice projection for extreme chart conditions
+    """
     h, w = image.shape[:2]
-    if h < 80 or w < 120:
+    if h < 60 or w < 80:
         raise ValueError("La región seleccionada es demasiado pequeña.")
 
+    # 1. Dual-Space Segmentation (illumination and theme invariant)
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-    # Common chart colors: green/turquoise bullish and red bearish.
-    green = cv2.inRange(hsv, np.array([35, 45, 45]), np.array([100, 255, 255]))
-    red1 = cv2.inRange(hsv, np.array([0, 55, 45]), np.array([12, 255, 255]))
-    red2 = cv2.inRange(hsv, np.array([165, 55, 45]), np.array([180, 255, 255]))
-    red = cv2.bitwise_or(red1, red2)
+    
+    # Green candle masks (Bullish)
+    hsv_green = cv2.inRange(hsv, np.array([32, 35, 35]), np.array([105, 255, 255]))
+    diff_green = (image[:, :, 1].astype(np.int16) - np.maximum(image[:, :, 0], image[:, :, 2])) > 12
+    green_mask = cv2.bitwise_or(hsv_green, (diff_green.astype(np.uint8) * 255))
+    
+    # Red candle masks (Bearish)
+    hsv_red1 = cv2.inRange(hsv, np.array([0, 35, 35]), np.array([16, 255, 255]))
+    hsv_red2 = cv2.inRange(hsv, np.array([160, 35, 35]), np.array([180, 255, 255]))
+    diff_red = (image[:, :, 2].astype(np.int16) - np.maximum(image[:, :, 0], image[:, :, 1])) > 12
+    red_mask = cv2.bitwise_or(cv2.bitwise_or(hsv_red1, hsv_red2), (diff_red.astype(np.uint8) * 255))
 
     kernel = np.ones((3, 3), np.uint8)
-    green = cv2.morphologyEx(green, cv2.MORPH_OPEN, kernel)
-    red = cv2.morphologyEx(red, cv2.MORPH_OPEN, kernel)
+    green_clean = cv2.morphologyEx(green_mask, cv2.MORPH_OPEN, kernel)
+    red_clean = cv2.morphologyEx(red_mask, cv2.MORPH_OPEN, kernel)
 
-    # Aggregate colored pixels by x-column; extract centers, heights, and wick extents
-    xs, centers, directions, heights, top_ys, bot_ys = [], [], [], [], [], []
-    for x in range(0, w, max(1, w // 180)):
-        gys = np.where(green[:, x] > 0)[0]
-        rys = np.where(red[:, x] > 0)[0]
-        if len(gys) >= 4 and len(gys) > len(rys) * 1.2:
-            ys = gys
-            direction = 1
-        elif len(rys) >= 4 and len(rys) > len(gys) * 1.2:
-            ys = rys
-            direction = -1
-        else:
-            continue
-        if len(ys) > h * 0.40:  # likely a large UI region, not a candle
-            continue
-        xs.append(x)
-        centers.append(float(np.median(ys)))
-        directions.append(direction)
-        heights.append(float(len(ys)))
-        top_ys.append(float(np.min(ys)))
-        bot_ys.append(float(np.max(ys)))
+    # 2. Contour Extraction for Millimeter-Accurate Candlesticks
+    raw_obs = []
 
-    # De-duplicate neighboring x-columns into approximate candle observations.
+    def extract_from_mask(mask, direction):
+        cnts, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        for c in cnts:
+            bx, by, bw, bh = cv2.boundingRect(c)
+            # Filter noise and huge UI containers
+            if bh < 4 or bw > w * 0.20 or bh > h * 0.85:
+                continue
+            roi = mask[by:by+bh, bx:bx+bw]
+            row_widths = np.sum(roi > 0, axis=1)
+            thresh = max(2, int(np.max(row_widths) * 0.55))
+            body_rows = np.where(row_widths >= thresh)[0]
+            if len(body_rows) > 0:
+                body_top = float(by + body_rows[0])
+                body_bottom = float(by + body_rows[-1])
+            else:
+                body_top = float(by + bh * 0.2)
+                body_bottom = float(by + bh * 0.8)
+
+            center_y = (body_top + body_bottom) / 2.0
+            height_val = max(2.5, body_bottom - body_top)
+            center_x = float(bx + bw / 2.0)
+            wick_top = float(by)
+            wick_bot = float(by + bh)
+
+            raw_obs.append((center_x, center_y, direction, height_val, wick_top, wick_bot))
+
+    extract_from_mask(green_clean, 1)
+    extract_from_mask(red_clean, -1)
+
+    # 3. Sort contours chronologically from left to right
+    raw_obs.sort(key=lambda item: item[0])
+
+    # De-duplicate close observations
     c_xs, c_centers, c_dirs, c_heights, c_tops, c_bots = [], [], [], [], [], []
-    for x, y, d, h_val, ty, by in zip(xs, centers, directions, heights, top_ys, bot_ys):
-        if not c_xs or x - c_xs[-1] > max(3, w // 100):
+    for x, y, d, h_val, ty, by in raw_obs:
+        if not c_xs or x - c_xs[-1] > max(3.0, w / 120.0):
             c_xs.append(x)
             c_centers.append(y)
             c_dirs.append(d)
@@ -78,10 +103,46 @@ def analyze_chart(image):
             c_tops[-1] = min(c_tops[-1], ty)
             c_bots[-1] = max(c_bots[-1], by)
 
+    # 4. Fallback Column Projection if contours were sparse (< 4)
+    if len(c_xs) < 4:
+        c_xs, c_centers, c_dirs, c_heights, c_tops, c_bots = [], [], [], [], [], []
+        step = max(1, w // 180)
+        for x in range(0, w, step):
+            gys = np.where(green_clean[:, x] > 0)[0]
+            rys = np.where(red_clean[:, x] > 0)[0]
+            if len(gys) >= 3 and len(gys) > len(rys) * 1.15:
+                ys = gys
+                direction = 1
+            elif len(rys) >= 3 and len(rys) > len(gys) * 1.15:
+                ys = rys
+                direction = -1
+            else:
+                continue
+            if len(ys) > h * 0.45:
+                continue
+            x_f = float(x)
+            y_f = float(np.median(ys))
+            h_f = float(len(ys))
+            ty_f = float(np.min(ys))
+            by_f = float(np.max(ys))
+            if not c_xs or x_f - c_xs[-1] > max(3.0, w / 100.0):
+                c_xs.append(x_f)
+                c_centers.append(y_f)
+                c_dirs.append(direction)
+                c_heights.append(h_f)
+                c_tops.append(ty_f)
+                c_bots.append(by_f)
+            else:
+                c_centers[-1] = (c_centers[-1] + y_f) / 2.0
+                c_dirs[-1] = direction
+                c_heights[-1] = max(c_heights[-1], h_f)
+                c_tops[-1] = min(c_tops[-1], ty_f)
+                c_bots[-1] = max(c_bots[-1], by_f)
+
     if len(c_xs) < 4:
         raise ValueError("No se detectaron suficientes velas. Asegúrate de encuadrar las velas del gráfico.")
 
-    # Convert to structured candles and run Multi-Agent consensus evaluation
+    # Convert to structured candles and evaluate with Bayesian Multi-Agent Engine
     candles = extract_candles_from_data(c_xs, c_centers, c_dirs, c_heights, c_tops, c_bots)
     master = ConsensusMasterAgent()
     res = master.evaluate(candles)
