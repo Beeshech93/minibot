@@ -17,9 +17,6 @@ from ui.main_window import MainWindow
 
 
 def main():
-    # Enable High DPI pixmaps
-    QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
-
     app = QApplication(sys.argv)
     app.setApplicationName("Pocket Mini Bot Pro")
     app.setOrganizationName("PocketMiniBot")
@@ -32,3 +29,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
