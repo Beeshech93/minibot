@@ -728,9 +728,12 @@
       const m5Bearish = currentM5 && (currentM5.color === -1 || currentM5.uwRatio >= 0.35);
       const vsa = analyzeVsa(candles);
 
-      // Mapeo de Soporte y Resistencia Global del Gráfico
-      const maxH = Math.max(...highs);
-      const minL = Math.min(...lows);
+      // Mapeo de Soporte y Resistencia Histórico (velas previas)
+      const prevCandles = candles.slice(0, -1);
+      const prevHighs = prevCandles.length > 0 ? prevCandles.map(cd => cd.high) : highs;
+      const prevLows = prevCandles.length > 0 ? prevCandles.map(cd => cd.low) : lows;
+      const maxH = Math.max(...prevHighs);
+      const minL = Math.min(...prevLows);
       const totalRange = Math.max(1.0, maxH - minL);
       const distToRes = (maxH - currentPrice) / totalRange;
       const distToSup = (currentPrice - minL) / totalRange;
@@ -742,6 +745,9 @@
         else if (candles[i].color === -1 && consecGreen === 0) consecRed++;
         else break;
       }
+
+      const bullTrendStrong = (ema9 > ema21 && ema21 > ema50);
+      const bearTrendStrong = (ema9 < ema21 && ema21 < ema50);
 
       // =============================================================
       // PILAR 1: ANÁLISIS DE VELAS ANTERIORES & PATRONES
@@ -792,15 +798,7 @@
       const isHammerRejection = (lwRatio >= 0.48 && bodyRatio <= 0.40);
       const isStarRejection = (uwRatio >= 0.48 && bodyRatio <= 0.40);
 
-      if (consecGreen >= 3) {
-        p1_vote = "ESPERAR";
-        p1_status = "Agotamiento";
-        p1_detail = `Agotamiento: ${consecGreen + 1} verdes seguidas (riesgo de retroceso)`;
-      } else if (consecRed >= 3) {
-        p1_vote = "ESPERAR";
-        p1_status = "Agotamiento";
-        p1_detail = `Agotamiento: ${consecRed + 1} rojas seguidas (riesgo de rebote)`;
-      } else if (isMorningStar) {
+      if (isMorningStar) {
         p1_vote = "CALL";
         p1_score = 92;
         p1_status = "Giro 3 Velas";
@@ -840,6 +838,30 @@
         p1_score = 91;
         p1_status = "Rechazo Mecha";
         p1_detail = `Estrella fugaz con ${Math.round(uwRatio * 100)}% mecha superior`;
+      } else if (consecGreen >= 2) {
+        const isTrueExhaustion = ((distToRes >= 0 && distToRes < 0.030 && !bullTrendStrong) || uwRatio >= 0.45 || rsi >= 76);
+        if (isTrueExhaustion) {
+          p1_vote = "ESPERAR";
+          p1_status = "Agotamiento";
+          p1_detail = `Agotamiento en Resistencia/Sobrecompra (${consecGreen + 1} verdes)`;
+        } else {
+          p1_vote = "CALL";
+          p1_score = 88;
+          p1_status = "Impulso Tendencial";
+          p1_detail = `Continuación Alcista (${consecGreen + 1} verdes con fuerza)`;
+        }
+      } else if (consecRed >= 2) {
+        const isTrueExhaustion = ((distToSup >= 0 && distToSup < 0.030 && !bearTrendStrong) || lwRatio >= 0.45 || rsi <= 24);
+        if (isTrueExhaustion) {
+          p1_vote = "ESPERAR";
+          p1_status = "Agotamiento";
+          p1_detail = `Agotamiento en Soporte/Sobreventa (${consecRed + 1} rojas)`;
+        } else {
+          p1_vote = "PUT";
+          p1_score = 88;
+          p1_status = "Impulso Tendencial";
+          p1_detail = `Continuación Bajista (${consecRed + 1} rojas con fuerza)`;
+        }
       }
 
       // =============================================================
@@ -850,8 +872,6 @@
       let p2_status = "Lateral";
       let p2_detail = "Sin tendencia clara";
 
-      const bullTrendStrong = (ema9 > ema21 && ema21 > ema50);
-      const bearTrendStrong = (ema9 < ema21 && ema21 < ema50);
       const softBull = (ema9 > ema21 && currentPrice >= ema21);
       const softBear = (ema9 < ema21 && currentPrice <= ema21);
 
@@ -919,19 +939,19 @@
         p3_vote = "PUT";
         p3_status = "Order Block SMC";
         p3_detail = smc.ob;
-      } else if (distToRes < 0.035) {
+      } else if (distToRes >= 0 && distToRes < 0.030 && !bullTrendStrong && c.color !== 1) {
         p3_is_safe = false;
         p3_status = "Techo Inmediato";
-        p3_detail = "Precio rozando resistencia máxima (alto riesgo de rechazo).";
-      } else if (distToSup < 0.035) {
+        p3_detail = "Precio rozando resistencia sin fuerza compradora.";
+      } else if (distToSup >= 0 && distToSup < 0.030 && !bearTrendStrong && c.color !== -1) {
         p3_is_safe = false;
         p3_status = "Piso Inmediato";
-        p3_detail = "Precio rozando soporte mínimo (alto riesgo de rebote).";
-      } else if (rsi > 70) {
+        p3_detail = "Precio rozando soporte sin fuerza vendedora.";
+      } else if (rsi > 78) {
         p3_is_safe = false;
         p3_status = "RSI Sobrecomprado";
         p3_detail = `RSI extremo (${rsi}). Riesgo de comprar en el pico.`;
-      } else if (rsi < 30) {
+      } else if (rsi < 22) {
         p3_is_safe = false;
         p3_status = "RSI Sobrevendido";
         p3_detail = `RSI extremo (${rsi}). Riesgo de vender en el suelo.`;
@@ -965,10 +985,16 @@
       else if (smc.bos === "BOS Bajista (Expansión)") zPut += 0.8;
 
       if (!p3_is_safe) { zCall -= 3.0; zPut -= 3.0; }
-      if (consecGreen >= 3) zCall -= 3.0;
-      if (consecRed >= 3) zPut -= 3.0;
-      if (distToRes < 0.035) zCall -= 3.5;
-      if (distToSup < 0.035) zPut -= 3.5;
+
+      // Momentum vs Agotamiento Real
+      if (consecGreen >= 2 && p1_vote === "CALL") zCall += 1.2;
+      else if (consecGreen >= 4 && (distToRes >= 0 && distToRes < 0.030 || uwRatio >= 0.35 || rsi >= 76)) zCall -= 2.5;
+
+      if (consecRed >= 2 && p1_vote === "PUT") zPut += 1.2;
+      else if (consecRed >= 4 && (distToSup >= 0 && distToSup < 0.030 || lwRatio >= 0.35 || rsi <= 24)) zPut -= 2.5;
+
+      if (distToRes >= 0 && distToRes < 0.030 && !bullTrendStrong) zCall -= 3.5;
+      if (distToSup >= 0 && distToSup < 0.030 && !bearTrendStrong) zPut -= 3.5;
 
       const probCall = Math.round((100.0 / (1.0 + Math.exp(-zCall))) * 10) / 10;
       const probPut = Math.round((100.0 / (1.0 + Math.exp(-zPut))) * 10) / 10;
@@ -988,7 +1014,7 @@
       // Caso A: Trampa de Liquidez Detectada (SMC Sweep)
       if (smc.sweepVote === "PUT" && p3_is_safe && p2_vote !== "CALL") {
         signal = "PUT";
-        confidence = Math.max(90, Math.min(97, Math.round(probPut)));
+        confidence = Math.max(88, Math.min(97, Math.round(probPut)));
         grade = "A+";
         setupName = "Trampa de Toros (SMC Bear Sweep)";
         reason = `${smc.sweep} + Absorción de Smart Money`;
@@ -997,7 +1023,7 @@
         nextCandleProb = confidence;
       } else if (smc.sweepVote === "CALL" && p3_is_safe && p2_vote !== "PUT") {
         signal = "CALL";
-        confidence = Math.max(90, Math.min(97, Math.round(probCall)));
+        confidence = Math.max(88, Math.min(97, Math.round(probCall)));
         grade = "A+";
         setupName = "Trampa de Osos (SMC Bull Sweep)";
         reason = `${smc.sweep} + Absorción de Smart Money`;
@@ -1005,23 +1031,25 @@
         nextCandleLabel = `🔮 PRÓXIMA VELA (1M): 🟢 SUBE (${confidence}%)`;
         nextCandleProb = confidence;
       }
-      // Caso B: Confluencia Cuántica Probabilística (P >= 85% + P3 Seguro)
+      // Caso B: Confluencia Cuántica Probabilística (P >= 68% + P3 Seguro)
       else if (p3_is_safe) {
-        if (probCall >= 85.0 && p1_vote === "CALL" && (p2_vote === "CALL" || (p2_vote === "NEUTRO" && c.low <= lowerBb))) {
+        if (probCall >= 68.0 && (p1_vote === "CALL" || p2_vote === "CALL") && p2_vote !== "PUT") {
           signal = "CALL";
-          confidence = Math.max(86, Math.min(96, Math.round(probCall)));
-          grade = "A+";
-          setupName = `${p1_detail} | ${smc.bos || 'Impulso'}`;
-          reason = `Confluencia Cuántica: ${p1_detail} + M5 Alcista + ${vsa.status}`;
+          confidence = Math.max(78, Math.min(97, Math.round(probCall)));
+          grade = confidence >= 86 ? "A+" : "A";
+          const callDetail = p1_vote === "CALL" ? p1_detail : "Impulso Alcista";
+          setupName = `${callDetail} | ${smc.bos || 'Tendencia M5'}`;
+          reason = `Confluencia: ${callDetail} + Tendencia ${p2_status} + M5 Alcista`;
           nextCandleDir = "SUBE";
           nextCandleLabel = `🔮 PRÓXIMA VELA (1M): 🟢 SUBE (${confidence}%)`;
           nextCandleProb = confidence;
-        } else if (probPut >= 85.0 && p1_vote === "PUT" && (p2_vote === "PUT" || (p2_vote === "NEUTRO" && c.high >= upperBb))) {
+        } else if (probPut >= 68.0 && (p1_vote === "PUT" || p2_vote === "PUT") && p2_vote !== "CALL") {
           signal = "PUT";
-          confidence = Math.max(86, Math.min(96, Math.round(probPut)));
-          grade = "A+";
-          setupName = `${p1_detail} | ${smc.bos || 'Impulso'}`;
-          reason = `Confluencia Cuántica: ${p1_detail} + M5 Bajista + ${vsa.status}`;
+          confidence = Math.max(78, Math.min(97, Math.round(probPut)));
+          grade = confidence >= 86 ? "A+" : "A";
+          const putDetail = p1_vote === "PUT" ? p1_detail : "Impulso Bajista";
+          setupName = `${putDetail} | ${smc.bos || 'Tendencia M5'}`;
+          reason = `Confluencia: ${putDetail} + Tendencia ${p2_status} + M5 Bajista`;
           nextCandleDir = "BAJA";
           nextCandleLabel = `🔮 PRÓXIMA VELA (1M): 🔴 BAJA (${confidence}%)`;
           nextCandleProb = confidence;

@@ -326,11 +326,12 @@ class ConsensusMasterAgent:
         recent_high = max(past_highs[-8:]) if past_highs else c.high
         recent_low = min(past_lows[-8:]) if past_lows else c.low
 
-        # Mapeo de Soporte y Resistencia Global del Gráfico
-        all_highs = [cd.high for cd in candles]
-        all_lows = [cd.low for cd in candles]
-        max_h = max(all_highs)
-        min_l = min(all_lows)
+        # Mapeo de Soporte y Resistencia Histórico (velas previas)
+        prev_candles = candles[:-1] if len(candles) > 1 else candles
+        prev_highs = [cd.high for cd in prev_candles]
+        prev_lows = [cd.low for cd in prev_candles]
+        max_h = max(prev_highs)
+        min_l = min(prev_lows)
         total_range = max(1.0, max_h - min_l)
         curr_price = prices[-1]
         dist_to_res = (max_h - curr_price) / total_range
@@ -364,6 +365,9 @@ class ConsensusMasterAgent:
         # MÓDULO INTELIGENTE 3: VOLUME SPREAD ANALYSIS (VSA)
         # =============================================================
         vsa = analyze_vsa(candles)
+
+        bull_trend_strong = (ema9 > ema21 and ema21 > ema50)
+        bear_trend_strong = (ema9 < ema21 and ema21 < ema50)
 
         # =============================================================
         # PILAR 1: ANÁLISIS DE VELAS ANTERIORES & PATRONES
@@ -414,16 +418,7 @@ class ConsensusMasterAgent:
         is_hammer_rejection = (lw_ratio >= 0.48 and body_ratio <= 0.40)
         is_star_rejection = (uw_ratio >= 0.48 and body_ratio <= 0.40)
 
-        # Chequeo de agotamiento en velas anteriores
-        if consec_green >= 3:
-            p1_vote = "ESPERAR"
-            p1_status = "Agotamiento"
-            p1_detail = f"Agotamiento: {consec_green+1} verdes seguidas (riesgo de retroceso)"
-        elif consec_red >= 3:
-            p1_vote = "ESPERAR"
-            p1_status = "Agotamiento"
-            p1_detail = f"Agotamiento: {consec_red+1} rojas seguidas (riesgo de rebote)"
-        elif is_morning_star:
+        if is_morning_star:
             p1_vote = "CALL"
             p1_score = 92
             p1_status = "Giro 3 Velas"
@@ -463,6 +458,28 @@ class ConsensusMasterAgent:
             p1_score = 91
             p1_status = "Rechazo Mecha"
             p1_detail = f"Estrella fugaz con {int(uw_ratio*100)}% mecha superior"
+        elif consec_green >= 2:
+            is_true_exhaustion = ((0 <= dist_to_res < 0.030 and not bull_trend_strong) or uw_ratio >= 0.45 or rsi >= 76)
+            if is_true_exhaustion:
+                p1_vote = "ESPERAR"
+                p1_status = "Agotamiento"
+                p1_detail = f"Agotamiento en Resistencia/Sobrecompra ({consec_green+1} verdes)"
+            else:
+                p1_vote = "CALL"
+                p1_score = 88
+                p1_status = "Impulso Tendencial"
+                p1_detail = f"Continuación Alcista ({consec_green+1} verdes con fuerza)"
+        elif consec_red >= 2:
+            is_true_exhaustion = ((0 <= dist_to_sup < 0.030 and not bear_trend_strong) or lw_ratio >= 0.45 or rsi <= 24)
+            if is_true_exhaustion:
+                p1_vote = "ESPERAR"
+                p1_status = "Agotamiento"
+                p1_detail = f"Agotamiento en Soporte/Sobreventa ({consec_red+1} rojas)"
+            else:
+                p1_vote = "PUT"
+                p1_score = 88
+                p1_status = "Impulso Tendencial"
+                p1_detail = f"Continuación Bajista ({consec_red+1} rojas con fuerza)"
 
         # =============================================================
         # PILAR 2: ANÁLISIS DE LA TENDENCIA (ESTRUCTURA & MEDIAS MÓVILES)
@@ -472,8 +489,6 @@ class ConsensusMasterAgent:
         p2_status = "Lateral"
         p2_detail = "Sin tendencia clara"
 
-        bull_trend_strong = (ema9 > ema21 and ema21 > ema50)
-        bear_trend_strong = (ema9 < ema21 and ema21 < ema50)
         soft_bull = (ema9 > ema21 and curr_price >= ema21)
         soft_bear = (ema9 < ema21 and curr_price <= ema21)
 
@@ -539,19 +554,19 @@ class ConsensusMasterAgent:
             p3_vote = "PUT"
             p3_status = "Order Block SMC"
             p3_detail = smc["ob"]
-        elif dist_to_res < 0.035:
+        elif 0 <= dist_to_res < 0.030 and not bull_trend_strong and c.color != 1:
             p3_is_safe = False
             p3_status = "Techo Inmediato"
-            p3_detail = "Precio rozando resistencia máxima (alto riesgo de rechazo)."
-        elif dist_to_sup < 0.035:
+            p3_detail = "Precio rozando resistencia sin fuerza compradora."
+        elif 0 <= dist_to_sup < 0.030 and not bear_trend_strong and c.color != -1:
             p3_is_safe = False
             p3_status = "Piso Inmediato"
-            p3_detail = "Precio rozando soporte mínimo (alto riesgo de rebote)."
-        elif rsi > 70:
+            p3_detail = "Precio rozando soporte sin fuerza vendedora."
+        elif rsi > 78:
             p3_is_safe = False
             p3_status = "RSI Sobrecomprado"
             p3_detail = f"RSI extremo ({rsi:.1f}). Riesgo de comprar en el pico."
-        elif rsi < 30:
+        elif rsi < 22:
             p3_is_safe = False
             p3_status = "RSI Sobrevendido"
             p3_detail = f"RSI extremo ({rsi:.1f}). Riesgo de vender en el suelo."
@@ -607,13 +622,21 @@ class ConsensusMasterAgent:
         if not p3_is_safe:
             z_call -= 3.0
             z_put -= 3.0
-        if consec_green >= 3:
-            z_call -= 3.0
-        if consec_red >= 3:
-            z_put -= 3.0
-        if dist_to_res < 0.035:
+
+        # Momentum vs Agotamiento Real
+        if consec_green >= 2 and p1_vote == "CALL":
+            z_call += 1.2
+        elif consec_green >= 4 and (0 <= dist_to_res < 0.030 or uw_ratio >= 0.35 or rsi >= 76):
+            z_call -= 2.5
+
+        if consec_red >= 2 and p1_vote == "PUT":
+            z_put += 1.2
+        elif consec_red >= 4 and (0 <= dist_to_sup < 0.030 or lw_ratio >= 0.35 or rsi <= 24):
+            z_put -= 2.5
+
+        if 0 <= dist_to_res < 0.030 and not bull_trend_strong:
             z_call -= 3.5
-        if dist_to_sup < 0.035:
+        if 0 <= dist_to_sup < 0.030 and not bear_trend_strong:
             z_put -= 3.5
 
         # Cálculo de probabilidades sigmoides calibradas
@@ -635,7 +658,7 @@ class ConsensusMasterAgent:
         # Caso A: Trampa de Liquidez Detectada (SMC Sweep)
         if smc["sweep_vote"] == "PUT" and p3_is_safe and p2_vote != "CALL":
             signal = "PUT"
-            confidence = max(90, min(97, int(prob_put)))
+            confidence = max(88, min(97, int(prob_put)))
             grade = "A+"
             setup_name = "Trampa de Toros (SMC Bear Sweep)"
             reason = f"{smc['sweep']} + Absorción de Smart Money"
@@ -645,7 +668,7 @@ class ConsensusMasterAgent:
 
         elif smc["sweep_vote"] == "CALL" and p3_is_safe and p2_vote != "PUT":
             signal = "CALL"
-            confidence = max(90, min(97, int(prob_call)))
+            confidence = max(88, min(97, int(prob_call)))
             grade = "A+"
             setup_name = "Trampa de Osos (SMC Bull Sweep)"
             reason = f"{smc['sweep']} + Absorción de Smart Money"
@@ -653,24 +676,26 @@ class ConsensusMasterAgent:
             next_candle_label = f"🔮 PRÓXIMA VELA (1M): 🟢 SUBE ({confidence}%)"
             next_candle_prob = confidence
 
-        # Caso B: Confluencia Cuántica Probabilística (P >= 85% + P3 Seguro)
+        # Caso B: Confluencia Cuántica Probabilística (P >= 68% + P3 Seguro)
         elif p3_is_safe:
-            if prob_call >= 85.0 and p1_vote == "CALL" and (p2_vote == "CALL" or (p2_vote == "NEUTRO" and c.low <= lower_bb)):
+            if prob_call >= 68.0 and (p1_vote == "CALL" or p2_vote == "CALL") and p2_vote != "PUT":
                 signal = "CALL"
-                confidence = max(86, min(96, int(prob_call)))
-                grade = "A+"
-                setup_name = f"{p1_detail} | {smc['bos'] or 'Impulso'}"
-                reason = f"Confluencia Cuántica: {p1_detail} + M5 Alcista + {vsa['status']}"
+                confidence = max(78, min(97, int(prob_call)))
+                grade = "A+" if confidence >= 86 else "A"
+                call_detail = p1_detail if p1_vote == "CALL" else "Impulso Alcista"
+                setup_name = f"{call_detail} | {smc['bos'] or 'Tendencia M5'}"
+                reason = f"Confluencia: {call_detail} + Tendencia {p2_status} + M5 Alcista"
                 next_candle_dir = "SUBE"
                 next_candle_label = f"🔮 PRÓXIMA VELA (1M): 🟢 SUBE ({confidence}%)"
                 next_candle_prob = confidence
 
-            elif prob_put >= 85.0 and p1_vote == "PUT" and (p2_vote == "PUT" or (p2_vote == "NEUTRO" and c.high >= upper_bb)):
+            elif prob_put >= 68.0 and (p1_vote == "PUT" or p2_vote == "PUT") and p2_vote != "CALL":
                 signal = "PUT"
-                confidence = max(86, min(96, int(prob_put)))
-                grade = "A+"
-                setup_name = f"{p1_detail} | {smc['bos'] or 'Impulso'}"
-                reason = f"Confluencia Cuántica: {p1_detail} + M5 Bajista + {vsa['status']}"
+                confidence = max(78, min(97, int(prob_put)))
+                grade = "A+" if confidence >= 86 else "A"
+                put_detail = p1_detail if p1_vote == "PUT" else "Impulso Bajista"
+                setup_name = f"{put_detail} | {smc['bos'] or 'Tendencia M5'}"
+                reason = f"Confluencia: {put_detail} + Tendencia {p2_status} + M5 Bajista"
                 next_candle_dir = "BAJA"
                 next_candle_label = f"🔮 PRÓXIMA VELA (1M): 🔴 BAJA ({confidence}%)"
                 next_candle_prob = confidence
