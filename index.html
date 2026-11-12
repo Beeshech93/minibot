@@ -559,55 +559,17 @@
       const lows = candles.map(c => c.low);
       const currentPrice = prices[prices.length - 1];
 
-      // 1. AGENTE: Acción del Precio & Velas Japonesas
       const last = candles[candles.length - 1];
       const prev = candles[candles.length - 2];
       const prev2 = candles[candles.length - 3] || prev;
-      let paVote = "ESPERAR", paConf = 50, paDetail = "Sin patrón claro";
+      const lastRange = Math.max(1.5, last.high - last.low);
 
-      const isHammer = last.lowerWick >= last.bodySize * 1.5 && last.upperWick <= last.bodySize * 0.8;
-      const isShootingStar = last.upperWick >= last.bodySize * 1.5 && last.lowerWick <= last.bodySize * 0.8;
-      const isBullEngulf = prev.color === -1 && last.color === 1 && last.close >= prev.open && last.bodySize > prev.bodySize * 1.15;
-      const isBearEngulf = prev.color === 1 && last.color === -1 && last.close <= prev.open && last.bodySize > prev.bodySize * 1.15;
-      const isMorningStar = prev2.color === -1 && prev.bodySize <= prev2.bodySize * 0.4 && last.color === 1 && last.close > (prev2.open + prev2.close) / 2;
-      const isEveningStar = prev2.color === 1 && prev.bodySize <= prev2.bodySize * 0.4 && last.color === -1 && last.close < (prev2.open + prev2.close) / 2;
+      // 0. FILTRO ESTRICTO CONTRA MERCADO PLANO Y DOJIS
+      const recentBodies = candles.slice(-5).map(c => c.bodySize);
+      const avgRecentBody = recentBodies.reduce((a, b) => a + b, 0) / recentBodies.length;
+      const isFlatDoji = last.bodySize < 2.0 || lastRange < 3.0 || (last.bodySize < avgRecentBody * 0.20 && lastRange < avgRecentBody * 0.8);
 
-      if (isMorningStar) { paVote = "CALL"; paConf = 92; paDetail = "Morning Star"; }
-      else if (isEveningStar) { paVote = "PUT"; paConf = 92; paDetail = "Evening Star"; }
-      else if (isHammer) { paVote = "CALL"; paConf = 88; paDetail = "Martillo Alcista"; }
-      else if (isBullEngulf) { paVote = "CALL"; paConf = 89; paDetail = "Envolvente Alcista"; }
-      else if (isShootingStar) { paVote = "PUT"; paConf = 88; paDetail = "Estrella Fugaz"; }
-      else if (isBearEngulf) { paVote = "PUT"; paConf = 89; paDetail = "Envolvente Bajista"; }
-      else if (last.color === 1 && prev.color === 1 && last.bodySize > prev.bodySize) { paVote = "CALL"; paConf = 75; paDetail = "Expansión Verde"; }
-      else if (last.color === -1 && prev.color === -1 && last.bodySize > prev.bodySize) { paVote = "PUT"; paConf = 75; paDetail = "Expansión Roja"; }
-
-      // 2. AGENTE: Estructura de Mercado & Fibonacci Golden Pocket
-      const maxH = Math.max(...highs);
-      const minL = Math.min(...lows);
-      const range = maxH - minL;
-      let stVote = "ESPERAR", stConf = 55, stDetail = "Zona Media", blockCall = false, blockPut = false;
-
-      const distRes = Math.abs(maxH - currentPrice) / Math.max(1, range);
-      const distSup = Math.abs(currentPrice - minL) / Math.max(1, range);
-      const fib50 = minL + range * 0.50;
-      const inGoldenPocket = Math.abs(currentPrice - fib50) / Math.max(1, range) < 0.06;
-
-      if (inGoldenPocket && last.color === 1) {
-        stVote = "CALL"; stConf = 90; stDetail = "Fibonacci 50%-61.8%";
-      } else if (distSup < 0.07 && last.color === 1) {
-        stVote = "CALL"; stConf = 88; stDetail = "Rebote en Soporte";
-      } else if (distRes < 0.07 && last.color === -1) {
-        stVote = "PUT"; stConf = 88; stDetail = "Rechazo en Resistencia";
-      } else if (currentPrice >= maxH * 0.998 && last.color === 1) {
-        stVote = "CALL"; stConf = 85; stDetail = "Ruptura Resistencia";
-      } else if (currentPrice <= minL * 1.002 && last.color === -1) {
-        stVote = "PUT"; stConf = 85; stDetail = "Ruptura Soporte";
-      }
-
-      if (distRes < 0.025) { blockCall = true; stDetail = "Peligro: Techo Próximo"; }
-      if (distSup < 0.025) { blockPut = true; stDetail = "Peligro: Piso Próximo"; }
-
-      // 3. AGENTE: Indicadores & EMA (9, 21, 50) + Divergencias RSI
+      // INDICADORES BASE
       function calcEma(series, period) {
         const k = 2 / (period + 1);
         let ema = [series[0]];
@@ -625,224 +587,171 @@
       }
       const rsi = losses === 0 ? 100 : Math.round(100 - (100 / (1 + (gains / Math.max(1, losses)))));
 
-      let indVote = "ESPERAR", indConf = 50, indDetail = `RSI ${rsi}`;
-      const bullTrend = ema9 > ema21 && ema21 > ema50;
-      const bearTrend = ema9 < ema21 && ema21 < ema50;
-
-      if (bullTrend && rsi < 66 && currentPrice > ema9) {
-        indVote = "CALL"; indConf = 85; indDetail = `EMA 9>21>50 (RSI ${rsi})`;
-      } else if (bearTrend && rsi > 34 && currentPrice < ema9) {
-        indVote = "PUT"; indConf = 85; indDetail = `EMA 9<21<50 (RSI ${rsi})`;
-      } else if (rsi < 24) {
-        indVote = "CALL"; indConf = 84; indDetail = `Sobreventa Extrema (${rsi})`;
-      } else if (rsi > 76) {
-        indVote = "PUT"; indConf = 84; indDetail = `Sobrecompra Extrema (${rsi})`;
-      }
-
-      // 4. AGENTE: Bandas de Bollinger & Volatilidad
       const windowBb = Math.min(20, prices.length);
       const sliceBb = prices.slice(-windowBb);
       const basis = sliceBb.reduce((a, b) => a + b, 0) / windowBb;
       const std = Math.sqrt(sliceBb.reduce((a, b) => a + Math.pow(b - basis, 2), 0) / windowBb);
       const upperBb = basis + 2.0 * std;
       const lowerBb = basis - 2.0 * std;
-      const bandwidth = (upperBb - lowerBb) / Math.max(1, basis);
 
-      let bbVote = "ESPERAR", bbConf = 50, bbDetail = "Canal Normal", isSqueeze = false;
-      if (bandwidth < 0.015 || std < 1.0) {
-        isSqueeze = true;
-        bbDetail = "Squeeze / Rango Plano";
-      } else if (currentPrice <= lowerBb && last.lowerWick >= last.bodySize * 0.7) {
-        bbVote = "CALL"; bbConf = 89; bbDetail = "Perforación Banda Inferior";
-      } else if (currentPrice >= upperBb && last.upperWick >= last.bodySize * 0.7) {
-        bbVote = "PUT"; bbConf = 89; bbDetail = "Perforación Banda Superior";
-      }
-
-      // 5. AGENTE: MACD (12, 26, 9)
-      const ema12 = calcEma(prices, 12);
-      const ema26 = calcEma(prices, 26);
-      const macdLine = ema12.map((val, idx) => val - ema26[idx]);
-      const sigLine = calcEma(macdLine, 9);
-      const hist = macdLine.map((val, idx) => val - sigLine[idx]);
-      const currHist = hist[hist.length - 1];
-      const prevHist = hist[hist.length - 2] || currHist;
-
-      let macdVote = "ESPERAR", macdConf = 50, macdDetail = "MACD Plano";
-      if (prevHist <= 0 && currHist > 0) {
-        macdVote = "CALL"; macdConf = 87; macdDetail = "Cruce Alcista Cero";
-      } else if (prevHist >= 0 && currHist < 0) {
-        macdVote = "PUT"; macdConf = 87; macdDetail = "Cruce Bajista Cero";
-      }
-
-      // 6. AGENTE: Cazador de Trampas de Liquidez (Smart Money)
-      let trapVote = "ESPERAR", trapConf = 50, trapDetail = "Sin trampa";
-      const recentH = Math.max(...highs.slice(-8, -1));
-      const recentL = Math.min(...lows.slice(-8, -1));
-      if (last.high > recentH && last.close < recentH && last.upperWick >= last.bodySize * 1.1) {
-        trapVote = "PUT"; trapConf = 93; trapDetail = "Trampa de Toros (Bull Trap)";
-      } else if (last.low < recentL && last.close > recentL && last.lowerWick >= last.bodySize * 1.1) {
-        trapVote = "CALL"; trapConf = 93; trapDetail = "Trampa de Osos (Bear Trap)";
-      }
-
-      // 7. COMITÉ MAESTRO: TRIPLE CONFLUENCIA & FILTROS
-      if (isSqueeze) {
-        return {
-          signal: "ESPERAR", confidence: 45, recommendedTime: "—", durationSeconds: 0,
-          rsi: rsi, trend: "Lateral", count: candles.length,
-          explanation: "FILTRO: Mercado en Squeeze / Consolidación sin tendencia. Esperando ruptura.",
-          agents: { pa: { vote: paVote, detail: paDetail }, st: { vote: stVote, detail: stDetail }, ind: { vote: indVote, detail: indDetail }, bb: { vote: bbVote, detail: bbDetail } }
-        };
-      }
-
-      const agentVotes = [
-        { v: paVote, c: paConf, w: 0.25 },
-        { v: stVote, c: stConf, w: 0.25 },
-        { v: indVote, c: indConf, w: 0.15 },
-        { v: bbVote, c: bbConf, w: 0.15 },
-        { v: macdVote, c: macdConf, w: 0.10 },
-        { v: trapVote, c: trapConf, w: 0.10 }
-      ];
-
-      let callScore = 0, putScore = 0, callCount = 0, putCount = 0, callWeights = 0, putWeights = 0;
-      agentVotes.forEach(a => {
-        if (a.v === "CALL") { callScore += a.c * a.w; callCount++; callWeights += a.w; }
-        else if (a.v === "PUT") { putScore += a.c * a.w; putCount++; putWeights += a.w; }
-      });
-
-      let callNorm = callWeights > 0 ? callScore / callWeights : 0;
-      let putNorm = putWeights > 0 ? putScore / putWeights : 0;
-
-      if (blockCall) { callNorm *= 0.35; callCount = Math.max(0, callCount - 1); }
-      if (blockPut) { putNorm *= 0.35; putCount = Math.max(0, putCount - 1); }
-
-      // PREDICTOR PRÓXIMA VELA (SUBE / BAJA)
-      let nextCandleDir = "INDECISIÓN";
-      let nextCandleProb = 50;
-      let nextCandleReason = "Fuerzas equilibradas";
-      
-      const lastRange = Math.max(1, last.high - last.low);
       const lowerRatio = last.lowerWick / lastRange;
       const upperRatio = last.upperWick / lastRange;
       const bodyRatio = last.bodySize / lastRange;
 
-      let subeWeight = 0, bajaWeight = 0;
-      let subeReasons = [], bajaReasons = [];
-
-      if (lowerRatio >= 0.35) {
-        subeWeight += 35 + Math.round(lowerRatio * 40);
-        subeReasons.push(`Rechazo inferior (${Math.round(lowerRatio*100)}%)`);
+      if (isFlatDoji) {
+        return {
+          signal: "ESPERAR",
+          grade: "F",
+          confidence: 35,
+          probCall: 50,
+          probPut: 50,
+          recommendedTime: "—",
+          durationSeconds: 0,
+          rsi: rsi,
+          trend: "Consolidación Plana",
+          count: candles.length,
+          nextCandle: { dir: "INDECISIÓN", label: "🔮 PRÓXIMA VELA: ⚖️ INDECISIÓN", prob: 50, reason: "Doji plano sin volumen" },
+          explanation: "FILTRO ACTIVADO: Vela plana o Doji detectado. Sin volumen ni dirección clara. Protegiendo capital.",
+          agents: {
+            pa: { vote: "ESPERAR", detail: "Doji Plano" },
+            st: { vote: "ESPERAR", detail: "Rango Estrecho" },
+            ind: { vote: "ESPERAR", detail: `RSI ${rsi}` },
+            mom: { vote: "ESPERAR", detail: "Sin Volumen" }
+          }
+        };
       }
-      if (upperRatio >= 0.35) {
-        bajaWeight += 35 + Math.round(upperRatio * 40);
-        bajaReasons.push(`Rechazo superior (${Math.round(upperRatio*100)}%)`);
+
+      // ==========================================================
+      // MOTOR SNIPER CUANTITATIVO: 4 GATILLOS A+ DE ALTA EFECTIVIDAD
+      // ==========================================================
+      let sniperSignal = "ESPERAR";
+      let sniperConfidence = 50;
+      let sniperGrade = "F";
+      let sniperSetup = "Sin Gatillo";
+      let sniperReason = "Esperando confluencia de alta probabilidad";
+
+      // 1. GATILLO 1: RECHAZO ELÁSTICO DE MECHA (PINBAR / MARTILLO EN EXTREMO)
+      if (lowerRatio >= 0.48 && bodyRatio <= 0.40) {
+        sniperSignal = "CALL";
+        sniperGrade = "A+";
+        sniperConfidence = 91;
+        sniperSetup = "Rechazo Elástico de Mecha (Pinbar Alcista)";
+        sniperReason = `Fuerte rechazo inferior (${Math.round(lowerRatio * 100)}% mecha). Absorción masiva de compradores`;
+      } else if (upperRatio >= 0.48 && bodyRatio <= 0.40) {
+        sniperSignal = "PUT";
+        sniperGrade = "A+";
+        sniperConfidence = 91;
+        sniperSetup = "Rechazo Elástico de Mecha (Pinbar Bajista)";
+        sniperReason = `Fuerte rechazo superior (${Math.round(upperRatio * 100)}% mecha). Absorción masiva de vendedores`;
       }
 
-      if (last.color === 1) {
-        if (bodyRatio >= 0.40 && upperRatio <= 0.25) {
-          subeWeight += 30;
-          subeReasons.push("Cuerpo verde expansivo");
-        } else if (bodyRatio <= 0.15 && prev.color === -1) {
-          subeWeight += 20;
-          subeReasons.push("Agotamiento vendedor (Doji)");
+      // 2. GATILLO 2: EXPANSION DE IMPULSO CONTINUO (MARUBOZU)
+      if (sniperGrade !== "A+") {
+        if (last.color === 1 && prev.color === 1 && bodyRatio >= 0.65 && upperRatio <= 0.15) {
+          sniperSignal = "CALL";
+          sniperGrade = "A+";
+          sniperConfidence = 89;
+          sniperSetup = "Marubozu Momentum Alcista";
+          sniperReason = "Cuerpo verde expansivo sin resistencia superior. Impulso institucional continuo";
+        } else if (last.color === -1 && prev.color === -1 && bodyRatio >= 0.65 && lowerRatio <= 0.15) {
+          sniperSignal = "PUT";
+          sniperGrade = "A+";
+          sniperConfidence = 89;
+          sniperSetup = "Marubozu Momentum Bajista";
+          sniperReason = "Cuerpo rojo expansivo sin rechazo inferior. Impulso bajista dominante";
         }
-      } else if (last.color === -1) {
-        if (bodyRatio >= 0.40 && lowerRatio <= 0.25) {
-          bajaWeight += 30;
-          bajaReasons.push("Cuerpo rojo expansivo");
-        } else if (bodyRatio <= 0.15 && prev.color === 1) {
-          bajaWeight += 20;
-          bajaReasons.push("Agotamiento comprador (Doji)");
+      }
+
+      // 3. GATILLO 3: TRAMPA DE LIQUIDEZ SMART MONEY (SMC TURTLE SOUP)
+      const lookback = Math.min(10, candles.length - 1);
+      const sliceCandles = candles.slice(-lookback - 1, -1);
+      const recentHigh = Math.max(...sliceCandles.map(c => c.high));
+      const recentLow = Math.min(...sliceCandles.map(c => c.low));
+
+      if (last.high > recentHigh && last.close < recentHigh && upperRatio >= 0.35) {
+        sniperSignal = "PUT";
+        sniperGrade = "A+";
+        sniperConfidence = 94;
+        sniperSetup = "Trampa de Toros (SMC Bearish Sweep)";
+        sniperReason = "Caza de stops por encima del máximo anterior y re-ingreso bajista inmediato";
+      } else if (last.low < recentLow && last.close > recentLow && lowerRatio >= 0.35) {
+        sniperSignal = "CALL";
+        sniperGrade = "A+";
+        sniperConfidence = 94;
+        sniperSetup = "Trampa de Osos (SMC Bullish Sweep)";
+        sniperReason = "Caza de liquidez por debajo del mínimo anterior y absorción alcista inmediata";
+      }
+
+      // 4. GATILLO 4: REVERSIÓN EXTREMA BOLLINGER + RSI DIVERGENTE
+      if (rsi < 25 && last.low <= lowerBb && lowerRatio >= 0.28) {
+        sniperSignal = "CALL";
+        sniperGrade = "A+";
+        sniperConfidence = 92;
+        sniperSetup = "Reversión Extrema Bollinger + RSI";
+        sniperReason = `Perforación banda inferior con RSI en sobreventa extrema (${rsi}) y rebote elástico`;
+      } else if (rsi > 75 && last.high >= upperBb && upperRatio >= 0.28) {
+        sniperSignal = "PUT";
+        sniperGrade = "A+";
+        sniperConfidence = 92;
+        sniperSetup = "Reversión Extrema Bollinger + RSI";
+        sniperReason = `Perforación banda superior con RSI en sobrecompra extrema (${rsi}) y rechazo elástico`;
+      }
+
+      // 5. GATILLO SECUNDARIO: TENDENCIA & PULLBACK CONFIRMADO (GRADO A)
+      if (sniperGrade === "F") {
+        const bullTrend = ema9 > ema21 && ema21 > ema50;
+        const bearTrend = ema9 < ema21 && ema21 < ema50;
+
+        if (bullTrend && last.color === 1 && currentPrice > ema9 && rsi >= 48 && rsi <= 65) {
+          sniperSignal = "CALL";
+          sniperGrade = "A";
+          sniperConfidence = 83;
+          sniperSetup = "Continuación de Tendencia EMA 9>21>50";
+          sniperReason = `Estructura alcista sólida sobre EMA9 con RSI favorable (${rsi})`;
+        } else if (bearTrend && last.color === -1 && currentPrice < ema9 && rsi <= 52 && rsi >= 35) {
+          sniperSignal = "PUT";
+          sniperGrade = "A";
+          sniperConfidence = 83;
+          sniperSetup = "Continuación de Tendencia EMA 9<21<50";
+          sniperReason = `Estructura bajista bajo EMA9 con RSI favorable (${rsi})`;
         }
       }
 
-      if (last.color === 1 && prev.color === 1) {
-        subeWeight += 20;
-        subeReasons.push("Impulso verde continuo");
-      } else if (last.color === -1 && prev.color === -1) {
-        bajaWeight += 20;
-        bajaReasons.push("Impulso rojo continuo");
-      }
-
-      if (paVote === "CALL") { subeWeight += 25; subeReasons.push(paDetail); }
-      else if (paVote === "PUT") { bajaWeight += 25; bajaReasons.push(paDetail); }
-
-      if (stVote === "CALL") { subeWeight += 25; subeReasons.push(stDetail); }
-      else if (stVote === "PUT") { bajaWeight += 25; bajaReasons.push(stDetail); }
-
-      if (bbVote === "CALL" || trapVote === "CALL") { subeWeight += 30; subeReasons.push("Rebote / Absorción"); }
-      else if (bbVote === "PUT" || trapVote === "PUT") { bajaWeight += 30; bajaReasons.push("Rechazo / Trampa"); }
-
-      if (rsi < 34) { subeWeight += 20; subeReasons.push(`RSI sobrevendido (${rsi})`); }
-      else if (rsi > 66) { bajaWeight += 20; bajaReasons.push(`RSI sobrecomprado (${rsi})`); }
-
-      if (subeWeight > bajaWeight + 12) {
-        nextCandleDir = "SUBE";
-        nextCandleProb = Math.min(96, Math.round(70 + (subeWeight / (subeWeight + bajaWeight + 1e-5)) * 25));
-        nextCandleReason = subeReasons.slice(0, 2).join(" · ") || "Presión compradora dominante";
-      } else if (bajaWeight > subeWeight + 12) {
-        nextCandleDir = "BAJA";
-        nextCandleProb = Math.min(96, Math.round(70 + (bajaWeight / (subeWeight + bajaWeight + 1e-5)) * 25));
-        nextCandleReason = bajaReasons.slice(0, 2).join(" · ") || "Presión vendedora dominante";
-      }
-
-      // ACUMULADOR BAYESIANO LOG-ODDS (PROBABILIDAD MATEMÁTICA)
-      let logOdds = 0;
-      agentVotes.forEach(a => {
-        const normConf = (a.c - 50) / 45;
-        if (a.v === "CALL") logOdds += a.w * normConf * 3.5;
-        else if (a.v === "PUT") logOdds -= a.w * normConf * 3.5;
-      });
-
-      if (blockCall) logOdds -= 1.8;
-      if (blockPut) logOdds += 1.8;
-
-      if (nextCandleDir === "SUBE") logOdds += 1.2;
-      else if (nextCandleDir === "BAJA") logOdds -= 1.2;
-
-      const probCall = 1 / (1 + Math.exp(-Math.max(-8, Math.min(8, logOdds))));
-      const probPut = 1 - probCall;
-      const probCallPct = Math.round(probCall * 1000) / 10;
-      const probPutPct = Math.round(probPut * 1000) / 10;
-
-      let finalSig = "ESPERAR", finalConf = 50, finalDurLabel = "1 VELA (M1)", finalDurSec = 60;
-
-      if (probCall >= 0.65 || (nextCandleDir === "SUBE" && probCall >= 0.55)) {
-        finalSig = "CALL";
-        finalConf = Math.min(96, Math.round(Math.max(probCall * 100, nextCandleProb)));
-        finalDurLabel = "1 VELA (M1)";
-        finalDurSec = 60;
-      } else if (probPut >= 0.65 || (nextCandleDir === "BAJA" && probPut >= 0.55)) {
-        finalSig = "PUT";
-        finalConf = Math.min(96, Math.round(Math.max(probPut * 100, nextCandleProb)));
-        finalDurLabel = "1 VELA (M1)";
-        finalDurSec = 60;
-      }
-
-      const nextCandleLabel = nextCandleDir === "SUBE" 
-        ? `🔮 PRÓXIMA VELA: 🟢 SUBE (${nextCandleProb}%)` 
-        : nextCandleDir === "BAJA" 
-        ? `🔮 PRÓXIMA VELA: 🔴 BAJA (${nextCandleProb}%)` 
+      // PREDICTOR DE PRÓXIMA VELA
+      let nextDir = sniperSignal === "CALL" ? "SUBE" : sniperSignal === "PUT" ? "BAJA" : "INDECISIÓN";
+      let nextProb = sniperSignal !== "ESPERAR" ? sniperConfidence : 50;
+      let nextLabel = nextDir === "SUBE" 
+        ? `🔮 PRÓXIMA VELA: 🟢 SUBE (${nextProb}%)` 
+        : nextDir === "BAJA" 
+        ? `🔮 PRÓXIMA VELA: 🔴 BAJA (${nextProb}%)` 
         : "🔮 PRÓXIMA VELA: ⚖️ INDECISIÓN";
 
+      const probCallPct = sniperSignal === "CALL" ? nextProb : (sniperSignal === "PUT" ? (100 - nextProb) : 50);
+      const probPutPct = sniperSignal === "PUT" ? nextProb : (sniperSignal === "CALL" ? (100 - nextProb) : 50);
+
+      const expText = sniperSignal !== "ESPERAR"
+        ? `🎯 [SNIPER ${sniperGrade}] Entrada ${sniperSignal} al cierre de vela. Setup: ${sniperSetup}. ${sniperReason}.`
+        : `Consenso IA (Esperar · ${sniperReason}): Filtro de alta precisión activo. Esperando gatillo A+ verificado.`;
+
       return {
-        signal: finalSig,
-        confidence: finalConf,
+        signal: sniperSignal,
+        grade: sniperGrade,
+        setup: sniperSetup,
+        confidence: sniperConfidence,
         probCall: probCallPct,
         probPut: probPutPct,
-        recommendedTime: finalDurLabel,
-        durationSeconds: finalDurSec,
+        recommendedTime: sniperSignal !== "ESPERAR" ? "1 VELA (M1)" : "—",
+        durationSeconds: sniperSignal !== "ESPERAR" ? 60 : 0,
         rsi: rsi,
-        trend: logOdds > 0.4 ? "Alcista" : logOdds < -0.4 ? "Bajista" : "Lateral",
+        trend: ema9 > ema21 ? "Alcista" : ema9 < ema21 ? "Bajista" : "Lateral",
         count: candles.length,
-        nextCandle: { dir: nextCandleDir, label: nextCandleLabel, prob: nextCandleProb, reason: nextCandleReason },
-        explanation: finalSig !== "ESPERAR"
-          ? `⚡ ${nextCandleLabel}. Confluencia (${finalConf}%): ${nextCandleReason} | Nivel: ${stDetail}.`
-          : `Consenso IA (Esperar · ${nextCandleReason}): Fuerzas equilibradas. Esperando gatillo direccional.`,
+        nextCandle: { dir: nextDir, label: nextLabel, prob: nextProb, reason: sniperReason },
+        explanation: expText,
         agents: {
-          pa: { vote: paVote, detail: paDetail },
-          st: { vote: stVote, detail: stDetail },
-          ind: { vote: indVote, detail: indDetail },
-          mom: { vote: trapVote !== "ESPERAR" ? trapVote : macdVote, detail: trapVote !== "ESPERAR" ? trapDetail : macdDetail }
+          pa: { vote: sniperSignal === "CALL" ? "CALL" : sniperSignal === "PUT" ? "PUT" : "ESPERAR", detail: sniperSetup },
+          st: { vote: sniperSignal, detail: `Nivel ${sniperGrade}` },
+          ind: { vote: rsi < 30 ? "CALL" : rsi > 70 ? "PUT" : "ESPERAR", detail: `RSI ${rsi}` },
+          mom: { vote: sniperSignal, detail: sniperReason }
         }
       };
     }
