@@ -586,19 +586,45 @@
       const ema21 = calcEma(prices, 21)[prices.length - 1];
       const ema50 = calcEma(prices, Math.min(50, prices.length))[prices.length - 1];
 
-      let gains = 0, losses = 0;
-      for (let i = 1; i < prices.length; i++) {
-        const diff = prices[i] - prices[i - 1];
-        if (diff > 0) gains += diff; else losses -= diff;
+      // RSI Clásico Wilder Suavizado
+      function calcRsi(series, period = 14) {
+        if (series.length < 2) return 50;
+        let gains = 0, losses = 0;
+        const p = Math.min(period, series.length - 1);
+        const slice = series.slice(-p - 1);
+        for (let i = 1; i < slice.length; i++) {
+          const diff = slice[i] - slice[i - 1];
+          if (diff > 0) gains += diff;
+          else losses -= diff;
+        }
+        if (losses === 0) return gains > 0 ? 100 : 50;
+        const rs = (gains / p) / (losses / p);
+        return Math.round(100 - (100 / (1 + rs)));
       }
-      const rsi = losses === 0 ? 100 : Math.round(100 - (100 / (1 + (gains / Math.max(1, losses)))));
+      const rsi = calcRsi(prices, 14);
 
+      // Bandas de Bollinger (20, 2)
       const windowBb = Math.min(20, prices.length);
       const sliceBb = prices.slice(-windowBb);
       const basis = sliceBb.reduce((a, b) => a + b, 0) / windowBb;
       const std = Math.sqrt(sliceBb.reduce((a, b) => a + Math.pow(b - basis, 2), 0) / windowBb);
       const upperBb = basis + 2.0 * std;
       const lowerBb = basis - 2.0 * std;
+
+      // Mapeo de Soporte y Resistencia Global del Gráfico
+      const maxH = Math.max(...highs);
+      const minL = Math.min(...lows);
+      const totalRange = Math.max(1.0, maxH - minL);
+      const distToRes = (maxH - currentPrice) / totalRange;
+      const distToSup = (currentPrice - minL) / totalRange;
+
+      // Conteo de velas consecutivas previas (agotamiento de tendencia)
+      let consecGreen = 0, consecRed = 0;
+      for (let i = candles.length - 2; i >= 0; i--) {
+        if (candles[i].color === 1 && consecRed === 0) consecGreen++;
+        else if (candles[i].color === -1 && consecGreen === 0) consecRed++;
+        else break;
+      }
 
       if (isSpikeManipulation) {
         return {
@@ -742,7 +768,48 @@
         }
       }
 
-      // FILTRO DE TENDENCIA MACRO INSTITUCIONAL (ANTI-MANIPULACIÓN)
+      // -------------------------------------------------------------
+      // FILTRO 1: SOPORTE Y RESISTENCIA (S/R PROXIMITY SHIELD)
+      // -------------------------------------------------------------
+      if (sniperSignal === "CALL" && distToRes < 0.035) {
+        sniperSignal = "ESPERAR";
+        sniperSetup = "Bloqueo por Techo (Resistencia)";
+        sniperReason = "El precio está rozando el techo del canal. Alto riesgo de rechazo bajista.";
+      } else if (sniperSignal === "PUT" && distToSup < 0.035) {
+        sniperSignal = "ESPERAR";
+        sniperSetup = "Bloqueo por Piso (Soporte)";
+        sniperReason = "El precio está rozando el piso del canal. Alto riesgo de rebote alcista.";
+      }
+
+      // -------------------------------------------------------------
+      // FILTRO 2: AGOTAMIENTO POR VELAS CONSECUTIVAS (CLIMAX SHIELD)
+      // -------------------------------------------------------------
+      if (sniperSignal === "CALL" && consecGreen >= 3) {
+        sniperSignal = "ESPERAR";
+        sniperSetup = "Agotamiento Comprador";
+        sniperReason = `Ya van ${consecGreen + 1} velas verdes seguidas. Probabilidad estadística de retroceso roja alta.`;
+      } else if (sniperSignal === "PUT" && consecRed >= 3) {
+        sniperSignal = "ESPERAR";
+        sniperSetup = "Agotamiento Vendedor";
+        sniperReason = `Ya van ${consecRed + 1} velas rojas seguidas. Probabilidad estadística de rebote verde alta.`;
+      }
+
+      // -------------------------------------------------------------
+      // FILTRO 3: SOBREVENTA / SOBRECOMPRA EN TENDENCIA
+      // -------------------------------------------------------------
+      if (sniperSignal === "CALL" && rsi > 70) {
+        sniperSignal = "ESPERAR";
+        sniperSetup = "RSI Sobrecomprado";
+        sniperReason = `RSI en zona extrema (${rsi}). Peligro de comprar en el pico del impulso.`;
+      } else if (sniperSignal === "PUT" && rsi < 30) {
+        sniperSignal = "ESPERAR";
+        sniperSetup = "RSI Sobrevendido";
+        sniperReason = `RSI en zona extrema (${rsi}). Peligro de vender en el suelo del impulso.`;
+      }
+
+      // -------------------------------------------------------------
+      // FILTRO 4: TENDENCIA MACRO INSTITUCIONAL (ANTI-MANIPULACIÓN)
+      // -------------------------------------------------------------
       if (sniperSignal === "CALL" && ema9 < ema21 && ema21 < ema50) {
         sniperConfidence = Math.max(50, sniperConfidence - 15);
         if (sniperConfidence < 75) {
@@ -901,15 +968,55 @@
       }
 
       const candles = [];
+      const halfScan = Math.max(3, Math.floor(minColDist * 0.8));
+
       for (let c of distinctCols) {
-        const upperWick = Math.max(1, c.bodyTop - c.wickTop);
-        const lowerWick = Math.max(1, c.wickBot - c.bodyBot);
-        const rangeSize = Math.max(2, c.wickBot - c.wickTop);
+        const xMin = Math.max(0, Math.floor(c.x - halfScan));
+        const xMax = Math.min(cropW - 1, Math.floor(c.x + halfScan));
+        const yMin = Math.floor(c.wickTop);
+        const yMax = Math.ceil(c.wickBot);
+
+        // Medir ancho horizontal fila por fila para aislar el cuerpo real de las mechas
+        let maxRowW = 0;
+        const rowCounts = [];
+        for (let y = yMin; y <= yMax; y++) {
+          let cnt = 0;
+          for (let x = xMin; x <= xMax; x++) {
+            const idx = (y * cropW + x) * 4;
+            const r = data[idx], g = data[idx + 1], b = data[idx + 2];
+            const match = c.dir > 0
+              ? ((g > 85 && g > r * 1.20 && (g - r) > 16 && (g - b) > 6) || (g > 85 && b > 75 && (g + b) > r * 2.2))
+              : (r > 85 && r > g * 1.22 && r > b * 1.22 && (r - g) > 18);
+            if (match) cnt++;
+          }
+          rowCounts.push({ y, cnt });
+          if (cnt > maxRowW) maxRowW = cnt;
+        }
+
+        // Filas de cuerpo = aquellas con grosor horizontal >= 50% del ancho máximo (mínimo 2px)
+        const bodyThresh = Math.max(2, Math.floor(maxRowW * 0.50));
+        const bodyRows = rowCounts.filter(rw => rw.cnt >= bodyThresh);
+
+        let realBodyTop, realBodyBot;
+        if (bodyRows.length > 0) {
+          realBodyTop = bodyRows[0].y;
+          realBodyBot = bodyRows[bodyRows.length - 1].y;
+        } else {
+          const medY = Math.floor((yMin + yMax) / 2);
+          realBodyTop = medY;
+          realBodyBot = medY + 1;
+        }
+
+        const bodyH = Math.max(1.5, realBodyBot - realBodyTop);
+        const upperWick = Math.max(0.5, realBodyTop - yMin);
+        const lowerWick = Math.max(0.5, yMax - realBodyBot);
+        const rangeSize = Math.max(2.0, yMax - yMin);
+
         // Coordenadas invertidas: mayor precio = menor Y
-        const cOpen = c.dir > 0 ? -c.bodyBot : -c.bodyTop;
-        const cClose = c.dir > 0 ? -c.bodyTop : -c.bodyBot;
-        const cHigh = -c.wickTop;
-        const cLow = -c.wickBot;
+        const cOpen = c.dir > 0 ? -realBodyBot : -realBodyTop;
+        const cClose = c.dir > 0 ? -realBodyTop : -realBodyBot;
+        const cHigh = -yMin;
+        const cLow = -yMax;
 
         candles.push({
           x: c.x,
@@ -918,11 +1025,11 @@
           high: cHigh,
           low: cLow,
           color: c.dir,
-          bodySize: c.bodyH,
+          bodySize: bodyH,
           upperWick: upperWick,
           lowerWick: lowerWick,
           rangeSize: rangeSize,
-          px: { x: c.x, bodyTop: c.bodyTop, bodyBot: c.bodyBot, wickTop: c.wickTop, wickBot: c.wickBot }
+          px: { x: c.x, bodyTop: realBodyTop, bodyBot: realBodyBot, wickTop: yMin, wickBot: yMax }
         });
       }
 

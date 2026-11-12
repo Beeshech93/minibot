@@ -180,6 +180,27 @@ class ConsensusMasterAgent:
         recent_high = max(past_highs[-8:]) if past_highs else c.high
         recent_low = min(past_lows[-8:]) if past_lows else c.low
 
+        # Mapeo de Soporte y Resistencia Global del Gráfico
+        all_highs = [cd.high for cd in candles]
+        all_lows = [cd.low for cd in candles]
+        max_h = max(all_highs)
+        min_l = min(all_lows)
+        total_range = max(1.0, max_h - min_l)
+        curr_price = prices[-1]
+        dist_to_res = (max_h - curr_price) / total_range
+        dist_to_sup = (curr_price - min_l) / total_range
+
+        # Conteo de velas consecutivas previas (para evitar trampas de agotamiento)
+        consec_green = 0
+        consec_red = 0
+        for cd in reversed(candles[:-1]):
+            if cd.color == 1 and consec_red == 0:
+                consec_green += 1
+            elif cd.color == -1 and consec_green == 0:
+                consec_red += 1
+            else:
+                break
+
         # =============================================================
         # 0. ESCUDO ANTI-MANIPULACIÓN DE BROKER (OTC SHIELD)
         # =============================================================
@@ -376,7 +397,46 @@ class ConsensusMasterAgent:
             next_candle_prob = confidence
 
         # -------------------------------------------------------------
-        # 6. FILTRO DE TENDENCIA MACRO INSTITUCIONAL (ANTI-MANIPULACIÓN)
+        # 6. FILTRO DE SOPORTE Y RESISTENCIA (S/R PROXIMITY SHIELD)
+        # -------------------------------------------------------------
+        if signal == "CALL" and dist_to_res < 0.035:
+            signal = "ESPERAR"
+            setup_name = "Bloqueo por Techo (Resistencia)"
+            reason = "El precio está rozando el techo del canal. Alto riesgo de rechazo bajista."
+
+        elif signal == "PUT" and dist_to_sup < 0.035:
+            signal = "ESPERAR"
+            setup_name = "Bloqueo por Piso (Soporte)"
+            reason = "El precio está rozando el piso del canal. Alto riesgo de rebote alcista."
+
+        # -------------------------------------------------------------
+        # 7. FILTRO DE AGOTAMIENTO POR VELAS CONSECUTIVAS (CLIMAX SHIELD)
+        # -------------------------------------------------------------
+        if signal == "CALL" and consec_green >= 3:
+            signal = "ESPERAR"
+            setup_name = "Agotamiento Comprador"
+            reason = f"Ya van {consec_green+1} velas verdes seguidas. Probabilidad estadística de retroceso alta."
+
+        elif signal == "PUT" and consec_red >= 3:
+            signal = "ESPERAR"
+            setup_name = "Agotamiento Vendedor"
+            reason = f"Ya van {consec_red+1} velas rojas seguidas. Probabilidad estadística de rebote alta."
+
+        # -------------------------------------------------------------
+        # 8. FILTRO DE SOBREVENTA / SOBRECOMPRA EN TENDENCIA
+        # -------------------------------------------------------------
+        if signal == "CALL" and rsi > 70:
+            signal = "ESPERAR"
+            setup_name = "RSI Sobrecomprado"
+            reason = f"RSI en zona extrema ({rsi:.1f}). Peligro de comprar en el pico del impulso."
+
+        elif signal == "PUT" and rsi < 30:
+            signal = "ESPERAR"
+            setup_name = "RSI Sobrevendido"
+            reason = f"RSI en zona extrema ({rsi:.1f}). Peligro de vender en el suelo del impulso."
+
+        # -------------------------------------------------------------
+        # 9. FILTRO DE TENDENCIA MACRO INSTITUCIONAL (ANTI-MANIPULACIÓN)
         # -------------------------------------------------------------
         # Si la señal va en contra de la EMA21/EMA50 macro, reducimos confianza o pausamos
         if signal == "CALL" and ema9 < ema21 and ema21 < ema50:
