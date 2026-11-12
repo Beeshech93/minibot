@@ -138,17 +138,17 @@ class MiniBot(QWidget):
         agents_layout.setContentsMargins(10, 8, 10, 8)
         agents_layout.setSpacing(3)
 
-        agents_header = QLabel("🤖 Confluencia Triple: Velas + Tendencia + Manipulación")
+        agents_header = QLabel("🧠 IA Cuántica Cuantitativa (SMC + Fractal M5 + VSA)")
         agents_header.setObjectName("agentsHeader")
         agents_layout.addWidget(agents_header)
 
-        self.agent_candles = QLabel("• 📊 Velas Anteriores: Analizando secuencia")
+        self.agent_candles = QLabel("• 🕯️ Velas & VSA: Analizando volumen y secuencias")
         self.agent_candles.setObjectName("agentRow")
-        self.agent_trend = QLabel("• 📈 Tendencia Macro: Mapeando medias EMA")
+        self.agent_trend = QLabel("• 📈 Fractal Macro 5M: Mapeando M5 y medias EMA")
         self.agent_trend.setObjectName("agentRow")
-        self.agent_manipulation = QLabel("• 🛡️ Anti-Manipulación: Verificando OTC")
+        self.agent_manipulation = QLabel("• 🏛️ Smart Money & OTC: Escaneando Order Blocks")
         self.agent_manipulation.setObjectName("agentRow")
-        self.agent_confluence = QLabel("• 🎯 Confluencia Global: Esperando alineación")
+        self.agent_confluence = QLabel("• 🎯 Confluencia Cuántica: Evaluando probabilidades")
         self.agent_confluence.setObjectName("agentRow")
 
         agents_layout.addWidget(self.agent_candles)
@@ -687,10 +687,10 @@ class MiniBot(QWidget):
             icon = "🟢" if vote == "CALL" else "🔴" if vote == "PUT" else "⚪"
             return f"{icon} {tag}: {vote} ({detail[:28]})"
 
-        self.agent_candles.setText(fmt("Velas Anteriores", cd))
-        self.agent_trend.setText(fmt("Tendencia Macro", tr))
-        self.agent_manipulation.setText(fmt("Anti-Manipulación", mn))
-        self.agent_confluence.setText(fmt("Confluencia Triple", cf))
+        self.agent_candles.setText(fmt("Velas & VSA", cd))
+        self.agent_trend.setText(fmt("Fractal M5", tr))
+        self.agent_manipulation.setText(fmt("Smart Money / OTC", mn))
+        self.agent_confluence.setText(fmt("Confluencia Cuántica", cf))
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

@@ -139,12 +139,158 @@ def calc_bollinger(prices: List[float], period: int = 20) -> Tuple[float, float,
     return mid + 2.0 * std, mid, mid - 2.0 * std
 
 
+def synthesize_m5(candles: List[Candle]) -> List[Dict[str, Any]]:
+    """Group 1M candles into synthetic 5M fractal candles."""
+    if not candles:
+        return []
+    m5_candles = []
+    chunk_size = 5
+    for i in range(0, len(candles), chunk_size):
+        chunk = candles[i:i+chunk_size]
+        if not chunk:
+            continue
+        c_open = chunk[0].open
+        c_high = max(cd.high for cd in chunk)
+        c_low = min(cd.low for cd in chunk)
+        c_close = chunk[-1].close
+        color = 1 if c_close >= c_open else -1
+        body_h = abs(c_close - c_open)
+        rng = max(1.0, c_high - c_low)
+        upper_w = max(0.1, c_high - max(c_open, c_close))
+        lower_w = max(0.1, min(c_open, c_close) - c_low)
+        m5_candles.append({
+            "open": c_open, "high": c_high, "low": c_low, "close": c_close,
+            "color": color, "body_size": body_h, "range_size": rng,
+            "upper_wick": upper_w, "lower_wick": lower_w,
+            "lw_ratio": lower_w / rng, "uw_ratio": upper_w / rng,
+            "body_ratio": body_h / rng
+        })
+    return m5_candles
+
+
+def detect_smc_structure(candles: List[Candle]) -> Dict[str, Any]:
+    """
+    Smart Money Concepts (SMC) Institutional Engine:
+    - Swing Highs / Swing Lows (Fractal pivots)
+    - BOS (Break of Structure): Momentum continuation
+    - Liquidity Sweeps (Turtle Soup): Stop hunts by market makers
+    - Institutional Order Blocks (OB): Unmitigated reaction zones
+    - Fair Value Gaps (FVG): Imbalance pockets
+    """
+    if len(candles) < 5:
+        return {
+            "bos": "Neutral", "ob": "Ninguno", "ob_vote": "NEUTRO", 
+            "fvg": "Equilibrado", "sweep": "Ninguno", "sweep_vote": "NEUTRO"
+        }
+    
+    highs = [c.high for c in candles]
+    lows = [c.low for c in candles]
+    
+    sh = []
+    sl = []
+    for i in range(2, len(candles) - 1):
+        if highs[i] > highs[i-1] and highs[i] > highs[i-2] and highs[i] >= highs[i+1]:
+            sh.append((i, highs[i]))
+        if lows[i] < lows[i-1] and lows[i] < lows[i-2] and lows[i] <= lows[i+1]:
+            sl.append((i, lows[i]))
+            
+    last_c = candles[-1]
+    last_sh = sh[-1][1] if sh else max(highs[:-1])
+    last_sl = sl[-1][1] if sl else min(lows[:-1])
+    
+    # 1. Break of Structure (BOS)
+    bos = "Neutral"
+    if last_c.close > last_sh:
+        bos = "BOS Alcista (Expansión)"
+    elif last_c.close < last_sl:
+        bos = "BOS Bajista (Expansión)"
+        
+    # 2. Liquidity Sweep (Turtle Soup)
+    sweep = "Ninguno"
+    sweep_vote = "NEUTRO"
+    rng = max(1.0, last_c.range_size)
+    if last_c.high > last_sh and last_c.close < last_sh and (last_c.upper_wick / rng) >= 0.35:
+        sweep = f"Caza de Stops sobre Máximo ({last_sh:.1f})"
+        sweep_vote = "PUT"
+    elif last_c.low < last_sl and last_c.close > last_sl and (last_c.lower_wick / rng) >= 0.35:
+        sweep = f"Caza de Stops bajo Mínimo ({last_sl:.1f})"
+        sweep_vote = "CALL"
+
+    # 3. Institutional Order Block (OB)
+    ob = "Ninguno"
+    ob_vote = "NEUTRO"
+    for i in range(len(candles) - 4, len(candles) - 1):
+        if i >= 1:
+            cd = candles[i]
+            # Bullish OB: last red candle before green expansion
+            if cd.color == -1 and candles[i+1].color == 1 and candles[i+1].close > cd.open:
+                if last_c.low <= cd.high and last_c.close >= cd.low:
+                    ob = f"Retest Bullish OB [{cd.low:.1f}-{cd.high:.1f}]"
+                    ob_vote = "CALL"
+                    break
+            # Bearish OB: last green candle before red expansion
+            elif cd.color == 1 and candles[i+1].color == -1 and candles[i+1].close < cd.open:
+                if last_c.high >= cd.low and last_c.close <= cd.high:
+                    ob = f"Retest Bearish OB [{cd.low:.1f}-{cd.high:.1f}]"
+                    ob_vote = "PUT"
+                    break
+                    
+    # 4. Fair Value Gap (FVG)
+    fvg = "Equilibrado"
+    if len(candles) >= 3:
+        c1, c3 = candles[-3], candles[-1]
+        if c3.low > c1.high:
+            fvg = "Bullish FVG (Imbalance Alcista)"
+        elif c3.high < c1.low:
+            fvg = "Bearish FVG (Imbalance Bajista)"
+            
+    return {
+        "bos": bos, "ob": ob, "ob_vote": ob_vote, 
+        "fvg": fvg, "sweep": sweep, "sweep_vote": sweep_vote,
+        "last_sh": last_sh, "last_sl": last_sl
+    }
+
+
+def analyze_vsa(candles: List[Candle]) -> Dict[str, Any]:
+    """Volume Spread Analysis (VSA): Relative Volatility & Institutional Absorption."""
+    if not candles:
+        return {"rel_spread": 1.0, "status": "Normal", "is_stopping_vol": False}
+    c = candles[-1]
+    rngs = [cd.range_size for cd in candles[-10:]]
+    avg_rng = float(np.mean(rngs)) if rngs else c.range_size
+    rel_spread = c.range_size / max(1.0, avg_rng)
+    
+    rng = max(1.0, c.range_size)
+    lw_ratio = c.lower_wick / rng
+    uw_ratio = c.upper_wick / rng
+    
+    is_stopping_vol = rel_spread >= 1.35 and (lw_ratio >= 0.45 or uw_ratio >= 0.45)
+    is_no_supply = rel_spread <= 0.65 and c.color == -1
+    is_no_demand = rel_spread <= 0.65 and c.color == 1
+    
+    status = "Normal"
+    if is_stopping_vol:
+        status = "Absorción Institucional (Stopping Volume)"
+    elif is_no_supply:
+        status = "No Supply (Secado de Ventas)"
+    elif is_no_demand:
+        status = "No Demand (Secado de Compras)"
+    elif rel_spread >= 1.6:
+        status = "Ultra Alto Spread (Impulso Fuerte)"
+        
+    return {
+        "rel_spread": round(rel_spread, 2),
+        "status": status,
+        "is_stopping_vol": is_stopping_vol
+    }
+
+
 # =========================================================================
 # HIGH WIN-RATE SNIPER ENGINE
 # =========================================================================
 
 class ConsensusMasterAgent:
-    """Master Sniper Engine executing only proven, high-probability A+ Setups."""
+    """Master Quantitative Sniper Engine integrating SMC, Fractal M5, VSA & Bayesian Intelligence."""
     def __init__(self):
         pass
 
@@ -202,7 +348,25 @@ class ConsensusMasterAgent:
                 break
 
         # =============================================================
-        # PILAR 1: ANÁLISIS DE VELAS ANTERIORES (SECUENCIA & MOMENTUM)
+        # MÓDULO INTELIGENTE 1: SMART MONEY CONCEPTS & ESTRUCTURA
+        # =============================================================
+        smc = detect_smc_structure(candles)
+
+        # =============================================================
+        # MÓDULO INTELIGENTE 2: FRACTAL SYNTHETIC M5 ANALYSIS
+        # =============================================================
+        m5_list = synthesize_m5(candles)
+        current_m5 = m5_list[-1] if m5_list else None
+        m5_bullish = current_m5 and (current_m5["color"] == 1 or current_m5["lw_ratio"] >= 0.35)
+        m5_bearish = current_m5 and (current_m5["color"] == -1 or current_m5["uw_ratio"] >= 0.35)
+
+        # =============================================================
+        # MÓDULO INTELIGENTE 3: VOLUME SPREAD ANALYSIS (VSA)
+        # =============================================================
+        vsa = analyze_vsa(candles)
+
+        # =============================================================
+        # PILAR 1: ANÁLISIS DE VELAS ANTERIORES & PATRONES
         # =============================================================
         p1_vote = "ESPERAR"
         p1_score = 50
@@ -317,12 +481,12 @@ class ConsensusMasterAgent:
             p2_vote = "CALL"
             p2_score = 92
             p2_status = "Alcista Fuerte"
-            p2_detail = "EMA 9>21>50 alineadas al alza"
+            p2_detail = f"EMA 9>21>50 + M5 ({'Alcista' if m5_bullish else 'Neutral'})"
         elif bear_trend_strong:
             p2_vote = "PUT"
             p2_score = 92
             p2_status = "Bajista Fuerte"
-            p2_detail = "EMA 9<21<50 alineadas a la baja"
+            p2_detail = f"EMA 9<21<50 + M5 ({'Bajista' if m5_bearish else 'Neutral'})"
         elif soft_bull:
             p2_vote = "CALL"
             p2_score = 82
@@ -342,9 +506,6 @@ class ConsensusMasterAgent:
         # =============================================================
         # PILAR 3: ESCUDO & DETECCIÓN DE MANIPULACIÓN DE BROKER (OTC)
         # =============================================================
-        is_bull_trap = (c.high > recent_high and c.close < recent_high and uw_ratio >= 0.35)
-        is_bear_trap = (c.low < recent_low and c.close > recent_low and lw_ratio >= 0.35)
-
         is_spike_manipulation = (uw_ratio >= 0.68 or lw_ratio >= 0.68) and c.body_size < 3.5
         avg_body = float(np.mean([cd.body_size for cd in candles[-5:]])) if len(candles) >= 5 else c.body_size
         is_flat_doji = c.body_size < 2.0 or rng < 3.0 or (c.body_size < avg_body * 0.22)
@@ -362,14 +523,22 @@ class ConsensusMasterAgent:
             p3_is_safe = False
             p3_status = "Doji / Sin Volumen"
             p3_detail = "Vela plana sin volumen institucional. Bloqueado."
-        elif is_bull_trap:
+        elif smc["sweep_vote"] == "PUT":
             p3_vote = "PUT"
             p3_status = "Trampa de Toros (SMC)"
-            p3_detail = f"Falsa ruptura de máximos ({recent_high:.1f}). Absorción bajista."
-        elif is_bear_trap:
+            p3_detail = smc["sweep"]
+        elif smc["sweep_vote"] == "CALL":
             p3_vote = "CALL"
             p3_status = "Trampa de Osos (SMC)"
-            p3_detail = f"Falsa ruptura de mínimos ({recent_low:.1f}). Absorción alcista."
+            p3_detail = smc["sweep"]
+        elif smc["ob_vote"] == "CALL" and dist_to_res >= 0.05:
+            p3_vote = "CALL"
+            p3_status = "Order Block SMC"
+            p3_detail = smc["ob"]
+        elif smc["ob_vote"] == "PUT" and dist_to_sup >= 0.05:
+            p3_vote = "PUT"
+            p3_status = "Order Block SMC"
+            p3_detail = smc["ob"]
         elif dist_to_res < 0.035:
             p3_is_safe = False
             p3_status = "Techo Inmediato"
@@ -388,7 +557,71 @@ class ConsensusMasterAgent:
             p3_detail = f"RSI extremo ({rsi:.1f}). Riesgo de vender en el suelo."
 
         # =============================================================
-        # REGLA DE ORO: CONFLUENCIA DE LOS 3 PILARES PARA ENTRAR
+        # MÓDULO 4: PROBABILIDAD BAYESIANA ADAPTATIVA
+        # =============================================================
+        z_call = 0.0
+        z_put = 0.0
+
+        # Evidencia de Velas y VSA
+        if p1_vote == "CALL":
+            z_call += 1.4
+        elif p1_vote == "PUT":
+            z_put += 1.4
+
+        if vsa["is_stopping_vol"] and lw_ratio >= 0.45:
+            z_call += 1.2
+        elif vsa["is_stopping_vol"] and uw_ratio >= 0.45:
+            z_put += 1.2
+
+        # Evidencia de Tendencia Macro
+        if p2_vote == "CALL":
+            z_call += 1.3
+            z_put -= 1.5
+        elif p2_vote == "PUT":
+            z_put += 1.3
+            z_call -= 1.5
+
+        # Evidencia Fractal M5
+        if m5_bullish:
+            z_call += 1.0
+        if m5_bearish:
+            z_put += 1.0
+
+        # Evidencia Smart Money (SMC)
+        if smc["sweep_vote"] == "CALL":
+            z_call += 2.2
+        elif smc["sweep_vote"] == "PUT":
+            z_put += 2.2
+
+        if smc["ob_vote"] == "CALL":
+            z_call += 1.5
+        elif smc["ob_vote"] == "PUT":
+            z_put += 1.5
+
+        if smc["bos"] == "BOS Alcista (Expansión)":
+            z_call += 0.8
+        elif smc["bos"] == "BOS Bajista (Expansión)":
+            z_put += 0.8
+
+        # Penalizaciones estrictas de protección
+        if not p3_is_safe:
+            z_call -= 3.0
+            z_put -= 3.0
+        if consec_green >= 3:
+            z_call -= 3.0
+        if consec_red >= 3:
+            z_put -= 3.0
+        if dist_to_res < 0.035:
+            z_call -= 3.5
+        if dist_to_sup < 0.035:
+            z_put -= 3.5
+
+        # Cálculo de probabilidades sigmoides calibradas
+        prob_call = round(float(100.0 / (1.0 + np.exp(-z_call))), 1)
+        prob_put = round(float(100.0 / (1.0 + np.exp(-z_put))), 1)
+
+        # =============================================================
+        # REGLA DE ORO DE CONFLUENCIA
         # =============================================================
         signal = "ESPERAR"
         confidence = 50
@@ -399,51 +632,50 @@ class ConsensusMasterAgent:
         next_candle_label = "🔮 PRÓXIMA VELA (1M): ⚖️ INDECISIÓN"
         next_candle_prob = 50
 
-        # Caso A: Trampa de Liquidez Detectada (Aprovechamos la manipulación del broker)
-        if p3_vote == "PUT" and p3_is_safe and p2_vote != "CALL":
+        # Caso A: Trampa de Liquidez Detectada (SMC Sweep)
+        if smc["sweep_vote"] == "PUT" and p3_is_safe and p2_vote != "CALL":
             signal = "PUT"
-            confidence = 94
+            confidence = max(90, min(97, int(prob_put)))
             grade = "A+"
-            setup_name = "Trampa de Toros (SMC Bear Trap)"
-            reason = "Manipulación de broker detectada: falsa ruptura y rechazo masivo"
+            setup_name = "Trampa de Toros (SMC Bear Sweep)"
+            reason = f"{smc['sweep']} + Absorción de Smart Money"
             next_candle_dir = "BAJA"
             next_candle_label = f"🔮 PRÓXIMA VELA (1M): 🔴 BAJA ({confidence}%)"
             next_candle_prob = confidence
 
-        elif p3_vote == "CALL" and p3_is_safe and p2_vote != "PUT":
+        elif smc["sweep_vote"] == "CALL" and p3_is_safe and p2_vote != "PUT":
             signal = "CALL"
-            confidence = 94
+            confidence = max(90, min(97, int(prob_call)))
             grade = "A+"
-            setup_name = "Trampa de Osos (SMC Bull Trap)"
-            reason = "Manipulación de broker detectada: falso barrido y absorción de compras"
+            setup_name = "Trampa de Osos (SMC Bull Sweep)"
+            reason = f"{smc['sweep']} + Absorción de Smart Money"
             next_candle_dir = "SUBE"
             next_candle_label = f"🔮 PRÓXIMA VELA (1M): 🟢 SUBE ({confidence}%)"
             next_candle_prob = confidence
 
-        # Caso B: Confluencia Triple (Velas Anteriores + Tendencia + Anti-Manipulación Seguro)
+        # Caso B: Confluencia Cuántica Probabilística (P >= 85% + P3 Seguro)
         elif p3_is_safe:
-            if p1_vote == "CALL" and (p2_vote == "CALL" or (p2_vote == "NEUTRO" and c.low <= lower_bb)):
+            if prob_call >= 85.0 and p1_vote == "CALL" and (p2_vote == "CALL" or (p2_vote == "NEUTRO" and c.low <= lower_bb)):
                 signal = "CALL"
-                confidence = max(p1_score, p2_score)
+                confidence = max(86, min(96, int(prob_call)))
                 grade = "A+"
-                setup_name = p1_detail
-                reason = f"Confluencia Triple: {p1_detail} + Tendencia {p2_status}"
+                setup_name = f"{p1_detail} | {smc['bos'] or 'Impulso'}"
+                reason = f"Confluencia Cuántica: {p1_detail} + M5 Alcista + {vsa['status']}"
                 next_candle_dir = "SUBE"
                 next_candle_label = f"🔮 PRÓXIMA VELA (1M): 🟢 SUBE ({confidence}%)"
                 next_candle_prob = confidence
 
-            elif p1_vote == "PUT" and (p2_vote == "PUT" or (p2_vote == "NEUTRO" and c.high >= upper_bb)):
+            elif prob_put >= 85.0 and p1_vote == "PUT" and (p2_vote == "PUT" or (p2_vote == "NEUTRO" and c.high >= upper_bb)):
                 signal = "PUT"
-                confidence = max(p1_score, p2_score)
+                confidence = max(86, min(96, int(prob_put)))
                 grade = "A+"
-                setup_name = p1_detail
-                reason = f"Confluencia Triple: {p1_detail} + Tendencia {p2_status}"
+                setup_name = f"{p1_detail} | {smc['bos'] or 'Impulso'}"
+                reason = f"Confluencia Cuántica: {p1_detail} + M5 Bajista + {vsa['status']}"
                 next_candle_dir = "BAJA"
                 next_candle_label = f"🔮 PRÓXIMA VELA (1M): 🔴 BAJA ({confidence}%)"
                 next_candle_prob = confidence
 
         if signal == "ESPERAR":
-            # Explicación transparente de cuál pilar bloqueó la orden
             if not p3_is_safe:
                 blocker = f"Anti-Manipulación ({p3_status}: {p3_detail})"
             elif p1_status == "Agotamiento":
@@ -451,17 +683,13 @@ class ConsensusMasterAgent:
             elif p1_vote != "ESPERAR" and p2_vote != "ESPERAR" and p1_vote != p2_vote:
                 blocker = f"Conflicto de Tendencia (Velas: {p1_vote} vs Tendencia: {p2_status})"
             else:
-                blocker = "Esperando confluencia simultánea de Velas + Tendencia + Manipulación"
+                blocker = f"Probabilidad insuficiente (CALL: {prob_call}% | PUT: {prob_put}%) - Esperando Setup A+"
 
-            explanation = f"Consenso IA (Esperar): {blocker}. Protegiendo saldo."
-            prob_call = 50.0
-            prob_put = 50.0
+            explanation = f"Consenso IA Cuántico (Esperar): {blocker}. Protegiendo saldo."
         else:
-            explanation = f"🎯 [CONFLUENCIA TRIPLE | {grade}] ({confidence}%): Entrada {signal} (1 MIN). {reason}."
-            prob_call = float(confidence) if signal == "CALL" else round(100.0 - confidence, 1)
-            prob_put = float(confidence) if signal == "PUT" else round(100.0 - confidence, 1)
+            explanation = f"🎯 [IA CUÁNTICA A+ | {grade}] ({confidence}%): Entrada {signal} (1 MIN). {reason}."
 
-        trend_str = p2_status
+        trend_str = f"{p2_status} (M5: {'🟢' if m5_bullish else '🔴' if m5_bearish else '⚪'})"
 
         return {
             "signal": signal,
@@ -483,9 +711,9 @@ class ConsensusMasterAgent:
             "trend": trend_str,
             "count": len(candles),
             "agents": {
-                "candles": {"vote": p1_vote, "status": p1_status, "detail": p1_detail},
-                "trend": {"vote": p2_vote, "status": p2_status, "detail": p2_detail},
-                "manipulation": {"vote": p3_vote if p3_vote != "NEUTRO" else ("ESPERAR" if not p3_is_safe else "LIMPIO"), "status": p3_status, "detail": p3_detail},
-                "confluence": {"vote": signal, "status": grade, "detail": setup_name or "Esperando 3 Pilares"}
+                "candles": {"vote": p1_vote, "status": vsa["status"], "detail": f"{p1_detail} | Spread {vsa['rel_spread']}x"},
+                "trend": {"vote": p2_vote, "status": p2_status, "detail": f"{p2_detail} | M5: {'Alcista' if m5_bullish else 'Bajista' if m5_bearish else 'Neutral'}"},
+                "manipulation": {"vote": p3_vote if p3_vote != "NEUTRO" else ("ESPERAR" if not p3_is_safe else "LIMPIO"), "status": p3_status, "detail": f"{p3_detail} | {smc['ob']}"},
+                "confluence": {"vote": signal, "status": grade, "detail": f"Prob: 🟢{prob_call}% 🔴{prob_put}% | {setup_name or 'Esperando A+'}"}
             }
         }

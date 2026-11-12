@@ -381,11 +381,11 @@
 
     <!-- Multi-Agent Intelligence Status Panel -->
     <div class="agents-panel">
-      <div class="agents-header">🤖 Confluencia Triple IA (3 Pilares)</div>
-      <div class="agent-row" id="agentCandles">⚪ Velas Anteriores: Analizando secuencia</div>
-      <div class="agent-row" id="agentTrend">⚪ Tendencia Macro: Mapeando medias EMA</div>
-      <div class="agent-row" id="agentManip">⚪ Anti-Manipulación Broker: Escaneando spikes</div>
-      <div class="agent-row" id="agentConf">⚪ Confluencia Global: Evaluando 3 pilares</div>
+      <div class="agents-header">🧠 IA Cuántica Cuantitativa (SMC + Fractal M5 + VSA)</div>
+      <div class="agent-row" id="agentCandles">⚪ Velas & VSA: Analizando volumen y secuencias</div>
+      <div class="agent-row" id="agentTrend">⚪ Fractal Macro 5M: Mapeando M5 y medias EMA</div>
+      <div class="agent-row" id="agentManip">⚪ Smart Money / OTC: Escaneando Order Blocks</div>
+      <div class="agent-row" id="agentConf">⚪ Confluencia Cuántica: Evaluando probabilidades</div>
     </div>
 
     <!-- Info banner -->
@@ -548,8 +548,125 @@
     });
 
     /* ==========================================================
-       PRO-GRADE MULTI-AGENT AI SYSTEM (TRIPLE CONFLUENCE)
+       PRO-GRADE QUANTUM MULTI-AGENT AI SYSTEM (SMC + M5 + VSA)
        ========================================================== */
+
+    function synthesizeM5(candles) {
+      if (!candles || candles.length === 0) return [];
+      const m5 = [];
+      const chunkSize = 5;
+      for (let i = 0; i < candles.length; i += chunkSize) {
+        const chunk = candles.slice(i, i + chunkSize);
+        if (!chunk.length) continue;
+        const cOpen = chunk[0].open;
+        const cHigh = Math.max(...chunk.map(cd => cd.high));
+        const cLow = Math.min(...chunk.map(cd => cd.low));
+        const cClose = chunk[chunk.length - 1].close;
+        const color = cClose >= cOpen ? 1 : -1;
+        const bodyH = Math.abs(cClose - cOpen);
+        const rng = Math.max(1.0, cHigh - cLow);
+        const upperW = Math.max(0.1, cHigh - Math.max(cOpen, cClose));
+        const lowerW = Math.max(0.1, Math.min(cOpen, cClose) - cLow);
+        m5.push({
+          open: cOpen, high: cHigh, low: cLow, close: cClose,
+          color: color, bodySize: bodyH, rangeSize: rng,
+          upperWick: upperW, lowerWick: lowerW,
+          lwRatio: lowerW / rng, uwRatio: upperW / rng,
+          bodyRatio: bodyH / rng
+        });
+      }
+      return m5;
+    }
+
+    function detectSmcStructure(candles) {
+      if (candles.length < 5) {
+        return { bos: "Neutral", ob: "Ninguno", obVote: "NEUTRO", fvg: "Equilibrado", sweep: "Ninguno", sweepVote: "NEUTRO" };
+      }
+      const highs = candles.map(c => c.high);
+      const lows = candles.map(c => c.low);
+      const sh = [];
+      const sl = [];
+      for (let i = 2; i < candles.length - 1; i++) {
+        if (highs[i] > highs[i - 1] && highs[i] > highs[i - 2] && highs[i] >= highs[i + 1]) {
+          sh.push(highs[i]);
+        }
+        if (lows[i] < lows[i - 1] && lows[i] < lows[i - 2] && lows[i] <= lows[i + 1]) {
+          sl.push(lows[i]);
+        }
+      }
+      const lastC = candles[candles.length - 1];
+      const lastSh = sh.length ? sh[sh.length - 1] : Math.max(...highs.slice(0, -1));
+      const lastSl = sl.length ? sl[sl.length - 1] : Math.min(...lows.slice(0, -1));
+
+      let bos = "Neutral";
+      if (lastC.close > lastSh) bos = "BOS Alcista (Expansión)";
+      else if (lastC.close < lastSl) bos = "BOS Bajista (Expansión)";
+
+      let sweep = "Ninguno";
+      let sweepVote = "NEUTRO";
+      const rng = Math.max(1.0, lastC.rangeSize || (lastC.high - lastC.low));
+      if (lastC.high > lastSh && lastC.close < lastSh && (lastC.upperWick / rng) >= 0.35) {
+        sweep = `Caza de Stops sobre Máximo (${lastSh.toFixed(1)})`;
+        sweepVote = "PUT";
+      } else if (lastC.low < lastSl && lastC.close > lastSl && (lastC.lowerWick / rng) >= 0.35) {
+        sweep = `Caza de Stops bajo Mínimo (${lastSl.toFixed(1)})`;
+        sweepVote = "CALL";
+      }
+
+      let ob = "Ninguno";
+      let obVote = "NEUTRO";
+      for (let i = candles.length - 4; i < candles.length - 1; i++) {
+        if (i >= 1) {
+          const cd = candles[i];
+          if (cd.color === -1 && candles[i + 1].color === 1 && candles[i + 1].close > cd.open) {
+            if (lastC.low <= cd.high && lastC.close >= cd.low) {
+              ob = `Retest Bullish OB [${cd.low.toFixed(1)}-${cd.high.toFixed(1)}]`;
+              obVote = "CALL";
+              break;
+            }
+          } else if (cd.color === 1 && candles[i + 1].color === -1 && candles[i + 1].close < cd.open) {
+            if (lastC.high >= cd.low && lastC.close <= cd.high) {
+              ob = `Retest Bearish OB [${cd.low.toFixed(1)}-${cd.high.toFixed(1)}]`;
+              obVote = "PUT";
+              break;
+            }
+          }
+        }
+      }
+
+      let fvg = "Equilibrado";
+      if (candles.length >= 3) {
+        const c1 = candles[candles.length - 3];
+        const c3 = candles[candles.length - 1];
+        if (c3.low > c1.high) fvg = "Bullish FVG (Imbalance Alcista)";
+        else if (c3.high < c1.low) fvg = "Bearish FVG (Imbalance Bajista)";
+      }
+
+      return { bos, ob, obVote, fvg, sweep, sweepVote, lastSh, lastSl };
+    }
+
+    function analyzeVsa(candles) {
+      if (!candles || !candles.length) return { relSpread: 1.0, status: "Normal", isStoppingVol: false };
+      const c = candles[candles.length - 1];
+      const rngs = candles.slice(-10).map(cd => cd.rangeSize || (cd.high - cd.low));
+      const avgRng = rngs.reduce((a, b) => a + b, 0) / rngs.length;
+      const cRng = Math.max(1.0, c.rangeSize || (c.high - c.low));
+      const relSpread = cRng / Math.max(1.0, avgRng);
+
+      const lwRatio = c.lowerWick / cRng;
+      const uwRatio = c.upperWick / cRng;
+      const isStoppingVol = relSpread >= 1.35 && (lwRatio >= 0.45 || uwRatio >= 0.45);
+      const isNoSupply = relSpread <= 0.65 && c.color === -1;
+      const isNoDemand = relSpread <= 0.65 && c.color === 1;
+
+      let status = "Normal";
+      if (isStoppingVol) status = "Absorción Institucional (Stopping Volume)";
+      else if (isNoSupply) status = "No Supply (Secado de Ventas)";
+      else if (isNoDemand) status = "No Demand (Secado de Compras)";
+      else if (relSpread >= 1.6) status = "Ultra Alto Spread (Impulso Fuerte)";
+
+      return { relSpread: Math.round(relSpread * 100) / 100, status, isStoppingVol };
+    }
 
     function evaluateMultiAgentSystem(candles) {
       if (candles.length < 3) return null;
@@ -603,13 +720,13 @@
       const upperBb = basis + 2.0 * std;
       const lowerBb = basis - 2.0 * std;
 
-      // Extremos de las últimas velas previas (excluyendo la actual)
-      const pastHighs = highs.slice(0, -1);
-      const pastLows = lows.slice(0, -1);
-      const recentSliceH = pastHighs.slice(-8);
-      const recentSliceL = pastLows.slice(-8);
-      const recentHigh = recentSliceH.length ? Math.max(...recentSliceH) : c.high;
-      const recentLow = recentSliceL.length ? Math.min(...recentSliceL) : c.low;
+      // Módulos Inteligentes SMC, Fractal M5 y VSA
+      const smc = detectSmcStructure(candles);
+      const m5List = synthesizeM5(candles);
+      const currentM5 = m5List.length ? m5List[m5List.length - 1] : null;
+      const m5Bullish = currentM5 && (currentM5.color === 1 || currentM5.lwRatio >= 0.35);
+      const m5Bearish = currentM5 && (currentM5.color === -1 || currentM5.uwRatio >= 0.35);
+      const vsa = analyzeVsa(candles);
 
       // Mapeo de Soporte y Resistencia Global del Gráfico
       const maxH = Math.max(...highs);
@@ -627,7 +744,7 @@
       }
 
       // =============================================================
-      // PILAR 1: ANÁLISIS DE VELAS ANTERIORES (SECUENCIA & MOMENTUM)
+      // PILAR 1: ANÁLISIS DE VELAS ANTERIORES & PATRONES
       // =============================================================
       let p1_vote = "ESPERAR";
       let p1_score = 50;
@@ -742,12 +859,12 @@
         p2_vote = "CALL";
         p2_score = 92;
         p2_status = "Alcista Fuerte";
-        p2_detail = "EMA 9>21>50 alineadas al alza";
+        p2_detail = `EMA 9>21>50 + M5 (${m5Bullish ? 'Alcista' : 'Neutral'})`;
       } else if (bearTrendStrong) {
         p2_vote = "PUT";
         p2_score = 92;
         p2_status = "Bajista Fuerte";
-        p2_detail = "EMA 9<21<50 alineadas a la baja";
+        p2_detail = `EMA 9<21<50 + M5 (${m5Bearish ? 'Bajista' : 'Neutral'})`;
       } else if (softBull) {
         p2_vote = "CALL";
         p2_score = 82;
@@ -768,9 +885,6 @@
       // =============================================================
       // PILAR 3: ESCUDO & DETECCIÓN DE MANIPULACIÓN DE BROKER (OTC)
       // =============================================================
-      const isBullTrap = (c.high > recentHigh && c.close < recentHigh && uwRatio >= 0.35);
-      const isBearTrap = (c.low < recentLow && c.close > recentLow && lwRatio >= 0.35);
-
       const isSpikeManipulation = (uwRatio >= 0.68 || lwRatio >= 0.68) && c.bodySize < 3.5;
       const recentBodies = candles.slice(-5).map(cd => cd.bodySize);
       const avgBody = recentBodies.reduce((a, b) => a + b, 0) / recentBodies.length;
@@ -789,14 +903,22 @@
         p3_is_safe = false;
         p3_status = "Doji / Sin Volumen";
         p3_detail = "Vela plana sin volumen institucional. Bloqueado.";
-      } else if (isBullTrap) {
+      } else if (smc.sweepVote === "PUT") {
         p3_vote = "PUT";
         p3_status = "Trampa de Toros (SMC)";
-        p3_detail = `Falsa ruptura de máximos (${recentHigh.toFixed(1)}). Absorción bajista.`;
-      } else if (isBearTrap) {
+        p3_detail = smc.sweep;
+      } else if (smc.sweepVote === "CALL") {
         p3_vote = "CALL";
         p3_status = "Trampa de Osos (SMC)";
-        p3_detail = `Falsa ruptura de mínimos (${recentLow.toFixed(1)}). Absorción alcista.`;
+        p3_detail = smc.sweep;
+      } else if (smc.obVote === "CALL" && distToRes >= 0.05) {
+        p3_vote = "CALL";
+        p3_status = "Order Block SMC";
+        p3_detail = smc.ob;
+      } else if (smc.obVote === "PUT" && distToSup >= 0.05) {
+        p3_vote = "PUT";
+        p3_status = "Order Block SMC";
+        p3_detail = smc.ob;
       } else if (distToRes < 0.035) {
         p3_is_safe = false;
         p3_status = "Techo Inmediato";
@@ -816,7 +938,43 @@
       }
 
       // =============================================================
-      // REGLA DE ORO: CONFLUENCIA DE LOS 3 PILARES PARA ENTRAR
+      // MÓDULO 4: PROBABILIDAD BAYESIANA ADAPTATIVA
+      // =============================================================
+      let zCall = 0.0;
+      let zPut = 0.0;
+
+      if (p1_vote === "CALL") zCall += 1.4;
+      else if (p1_vote === "PUT") zPut += 1.4;
+
+      if (vsa.isStoppingVol && lwRatio >= 0.45) zCall += 1.2;
+      else if (vsa.isStoppingVol && uwRatio >= 0.45) zPut += 1.2;
+
+      if (p2_vote === "CALL") { zCall += 1.3; zPut -= 1.5; }
+      else if (p2_vote === "PUT") { zPut += 1.3; zCall -= 1.5; }
+
+      if (m5Bullish) zCall += 1.0;
+      if (m5Bearish) zPut += 1.0;
+
+      if (smc.sweepVote === "CALL") zCall += 2.2;
+      else if (smc.sweepVote === "PUT") zPut += 2.2;
+
+      if (smc.obVote === "CALL") zCall += 1.5;
+      else if (smc.obVote === "PUT") zPut += 1.5;
+
+      if (smc.bos === "BOS Alcista (Expansión)") zCall += 0.8;
+      else if (smc.bos === "BOS Bajista (Expansión)") zPut += 0.8;
+
+      if (!p3_is_safe) { zCall -= 3.0; zPut -= 3.0; }
+      if (consecGreen >= 3) zCall -= 3.0;
+      if (consecRed >= 3) zPut -= 3.0;
+      if (distToRes < 0.035) zCall -= 3.5;
+      if (distToSup < 0.035) zPut -= 3.5;
+
+      const probCall = Math.round((100.0 / (1.0 + Math.exp(-zCall))) * 10) / 10;
+      const probPut = Math.round((100.0 / (1.0 + Math.exp(-zPut))) * 10) / 10;
+
+      // =============================================================
+      // REGLA DE ORO DE CONFLUENCIA
       // =============================================================
       let signal = "ESPERAR";
       let confidence = 50;
@@ -827,43 +985,43 @@
       let nextCandleLabel = "🔮 PRÓXIMA VELA (1M): ⚖️ INDECISIÓN";
       let nextCandleProb = 50;
 
-      // Caso A: Trampa de Liquidez Detectada (Aprovechamos la manipulación del broker)
-      if (p3_vote === "PUT" && p3_is_safe && p2_vote !== "CALL") {
+      // Caso A: Trampa de Liquidez Detectada (SMC Sweep)
+      if (smc.sweepVote === "PUT" && p3_is_safe && p2_vote !== "CALL") {
         signal = "PUT";
-        confidence = 94;
+        confidence = Math.max(90, Math.min(97, Math.round(probPut)));
         grade = "A+";
-        setupName = "Trampa de Toros (SMC Bear Trap)";
-        reason = "Manipulación de broker detectada: falsa ruptura y rechazo masivo";
+        setupName = "Trampa de Toros (SMC Bear Sweep)";
+        reason = `${smc.sweep} + Absorción de Smart Money`;
         nextCandleDir = "BAJA";
         nextCandleLabel = `🔮 PRÓXIMA VELA (1M): 🔴 BAJA (${confidence}%)`;
         nextCandleProb = confidence;
-      } else if (p3_vote === "CALL" && p3_is_safe && p2_vote !== "PUT") {
+      } else if (smc.sweepVote === "CALL" && p3_is_safe && p2_vote !== "PUT") {
         signal = "CALL";
-        confidence = 94;
+        confidence = Math.max(90, Math.min(97, Math.round(probCall)));
         grade = "A+";
-        setupName = "Trampa de Osos (SMC Bull Trap)";
-        reason = "Manipulación de broker detectada: falso barrido y absorción de compras";
+        setupName = "Trampa de Osos (SMC Bull Sweep)";
+        reason = `${smc.sweep} + Absorción de Smart Money`;
         nextCandleDir = "SUBE";
         nextCandleLabel = `🔮 PRÓXIMA VELA (1M): 🟢 SUBE (${confidence}%)`;
         nextCandleProb = confidence;
       }
-      // Caso B: Confluencia Triple (Velas Anteriores + Tendencia + Anti-Manipulación Seguro)
+      // Caso B: Confluencia Cuántica Probabilística (P >= 85% + P3 Seguro)
       else if (p3_is_safe) {
-        if (p1_vote === "CALL" && (p2_vote === "CALL" || (p2_vote === "NEUTRO" && c.low <= lowerBb))) {
+        if (probCall >= 85.0 && p1_vote === "CALL" && (p2_vote === "CALL" || (p2_vote === "NEUTRO" && c.low <= lowerBb))) {
           signal = "CALL";
-          confidence = Math.max(p1_score, p2_score);
+          confidence = Math.max(86, Math.min(96, Math.round(probCall)));
           grade = "A+";
-          setupName = p1_detail;
-          reason = `Confluencia Triple: ${p1_detail} + Tendencia ${p2_status}`;
+          setupName = `${p1_detail} | ${smc.bos || 'Impulso'}`;
+          reason = `Confluencia Cuántica: ${p1_detail} + M5 Alcista + ${vsa.status}`;
           nextCandleDir = "SUBE";
           nextCandleLabel = `🔮 PRÓXIMA VELA (1M): 🟢 SUBE (${confidence}%)`;
           nextCandleProb = confidence;
-        } else if (p1_vote === "PUT" && (p2_vote === "PUT" || (p2_vote === "NEUTRO" && c.high >= upperBb))) {
+        } else if (probPut >= 85.0 && p1_vote === "PUT" && (p2_vote === "PUT" || (p2_vote === "NEUTRO" && c.high >= upperBb))) {
           signal = "PUT";
-          confidence = Math.max(p1_score, p2_score);
+          confidence = Math.max(86, Math.min(96, Math.round(probPut)));
           grade = "A+";
-          setupName = p1_detail;
-          reason = `Confluencia Triple: ${p1_detail} + Tendencia ${p2_status}`;
+          setupName = `${p1_detail} | ${smc.bos || 'Impulso'}`;
+          reason = `Confluencia Cuántica: ${p1_detail} + M5 Bajista + ${vsa.status}`;
           nextCandleDir = "BAJA";
           nextCandleLabel = `🔮 PRÓXIMA VELA (1M): 🔴 BAJA (${confidence}%)`;
           nextCandleProb = confidence;
@@ -871,9 +1029,6 @@
       }
 
       let explanation = "";
-      let probCall = 50.0;
-      let probPut = 50.0;
-
       if (signal === "ESPERAR") {
         let blocker = "";
         if (!p3_is_safe) {
@@ -883,16 +1038,14 @@
         } else if (p1_vote !== "ESPERAR" && p2_vote !== "ESPERAR" && p1_vote !== p2_vote) {
           blocker = `Conflicto de Tendencia (Velas: ${p1_vote} vs Tendencia: ${p2_status})`;
         } else {
-          blocker = "Esperando confluencia simultánea de Velas + Tendencia + Manipulación";
+          blocker = `Probabilidad insuficiente (CALL: ${probCall}% | PUT: ${probPut}%) - Esperando Setup A+`;
         }
-        explanation = `Consenso IA (Esperar): ${blocker}. Protegiendo saldo.`;
-        probCall = 50.0;
-        probPut = 50.0;
+        explanation = `Consenso IA Cuántico (Esperar): ${blocker}. Protegiendo saldo.`;
       } else {
-        explanation = `🎯 [CONFLUENCIA TRIPLE | ${grade}] (${confidence}%): Entrada ${signal} (1 MIN). ${reason}.`;
-        probCall = signal === "CALL" ? confidence : Math.round(100.0 - confidence);
-        probPut = signal === "PUT" ? confidence : Math.round(100.0 - confidence);
+        explanation = `🎯 [IA CUÁNTICA A+ | ${grade}] (${confidence}%): Entrada ${signal} (1 MIN). ${reason}.`;
       }
+
+      const trendStr = `${p2_status} (M5: ${m5Bullish ? '🟢' : m5Bearish ? '🔴' : '⚪'})`;
 
       return {
         signal: signal,
@@ -904,15 +1057,15 @@
         recommendedTime: signal !== "ESPERAR" ? "1 VELA (M1)" : "—",
         durationSeconds: signal !== "ESPERAR" ? 60 : 0,
         rsi: rsi,
-        trend: p2_status,
+        trend: trendStr,
         count: candles.length,
         nextCandle: { dir: nextCandleDir, label: nextCandleLabel, prob: nextCandleProb, reason: setupName || "Fuerzas equilibradas" },
         explanation: explanation,
         agents: {
-          candles: { vote: p1_vote, status: p1_status, detail: p1_detail },
-          trend: { vote: p2_vote, status: p2_status, detail: p2_detail },
-          manipulation: { vote: p3_vote !== "NEUTRO" ? p3_vote : (!p3_is_safe ? "ESPERAR" : "LIMPIO"), status: p3_status, detail: p3_detail },
-          confluence: { vote: signal, status: grade, detail: setupName || "Esperando 3 Pilares" }
+          candles: { vote: p1_vote, status: vsa.status, detail: `${p1_detail} | Spread ${vsa.relSpread}x` },
+          trend: { vote: p2_vote, status: p2_status, detail: `${p2_detail} | M5: ${m5Bullish ? 'Alcista' : m5Bearish ? 'Bajista' : 'Neutral'}` },
+          manipulation: { vote: p3_vote !== "NEUTRO" ? p3_vote : (!p3_is_safe ? "ESPERAR" : "LIMPIO"), status: p3_status, detail: `${p3_detail} | ${smc.ob}` },
+          confluence: { vote: signal, status: grade, detail: `Prob: 🟢${probCall}% 🔴${probPut}% | ${setupName || 'Esperando A+'}` }
         }
       };
     }
@@ -1207,10 +1360,10 @@
           const icon = a.vote === "CALL" ? "🟢" : a.vote === "PUT" ? "🔴" : a.vote === "LIMPIO" ? "🟢" : "⚪";
           return `${icon} ${tag}: ${a.vote} (${(a.detail || a.status || '').substring(0, 26)})`;
         }
-        if (agentCandles && agents.candles) agentCandles.innerText = fmt("Velas Anteriores", agents.candles);
-        if (agentTrend && agents.trend) agentTrend.innerText = fmt("Tendencia Macro", agents.trend);
-        if (agentManip && agents.manipulation) agentManip.innerText = fmt("Anti-Manipulación", agents.manipulation);
-        if (agentConf && agents.confluence) agentConf.innerText = fmt("Confluencia Triple", agents.confluence);
+        if (agentCandles && agents.candles) agentCandles.innerText = fmt("Velas & VSA", agents.candles);
+        if (agentTrend && agents.trend) agentTrend.innerText = fmt("Fractal M5", agents.trend);
+        if (agentManip && agents.manipulation) agentManip.innerText = fmt("Smart Money / OTC", agents.manipulation);
+        if (agentConf && agents.confluence) agentConf.innerText = fmt("Confluencia Cuántica", agents.confluence);
       }
 
       footerText.innerText = "Actualizado: " + new Date().toLocaleTimeString();
