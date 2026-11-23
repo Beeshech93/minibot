@@ -111,7 +111,7 @@ def calc_ema(prices: List[float], period: int) -> float:
     return ema
 
 
-def calc_rsi(prices: List[float], period: int = 14) -> float:
+def calc_rsi(prices: List[float], period: int = 20) -> float:
     if len(prices) < 2:
         return 50.0
     deltas = np.diff(prices)
@@ -309,7 +309,7 @@ class ConsensusMasterAgent:
         prev2 = candles[-3] if len(candles) >= 3 else prev
 
         prices = [cd.close for cd in candles]
-        rsi = calc_rsi(prices, 14)
+        rsi = calc_rsi(prices, 20)
         upper_bb, mid_bb, lower_bb = calc_bollinger(prices, 20)
         ema9 = calc_ema(prices, 9)
         ema21 = calc_ema(prices, 21)
@@ -667,7 +667,7 @@ class ConsensusMasterAgent:
         grade = "A+" if confidence >= 82 else ("A" if confidence >= 68 else ("B+" if confidence >= 58 else "B"))
 
         if confidence >= 68:
-            explanation = f"🎯 [SEÑAL {grade} | ALTA CONFLUENCIA] ({confidence}%): {'🟢 SUBIR (CALL)' if signal == 'CALL' else '🔴 BAJAR (PUT)'} (1 MIN). {reason}."
+            explanation = f"🎯 [SEÑAL {grade} | ALTA CONFLUENCIA] ({confidence}%): {'🟢 SUBIR (CALL)' if signal == 'CALL' else '🔴 BAJAR (PUT)'} (30 SEG / 00:00:30). {reason}."
         else:
             explanation = f"⚡ [PROYECCIÓN {grade}] ({confidence}%): Inclinación hacia {'🟢 SUBIR' if signal == 'CALL' else '🔴 BAJAR'}. {reason}."
 
@@ -678,8 +678,8 @@ class ConsensusMasterAgent:
             "confidence": confidence,
             "grade": grade,
             "setup": setup_name,
-            "recommended_time": "1 MINUTO (M1)",
-            "duration_seconds": 60,
+            "recommended_time": "30 SEGUNDOS (00:00:30)",
+            "duration_seconds": 30,
             "explanation": explanation,
             "next_candle": {
                 "direction": next_candle_dir,

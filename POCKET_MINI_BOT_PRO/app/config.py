@@ -26,7 +26,7 @@ ALWAYS_ON_TOP = True
 
 # Trading Timeframes
 TIMEFRAMES = ["5s", "15s", "30s", "1m", "5m"]
-DEFAULT_TIMEFRAME = "1m"
+DEFAULT_TIMEFRAME = "30s"
 TIMEFRAME_SECONDS = {
     "5s": 5,
     "15s": 15,
@@ -49,10 +49,10 @@ FILTER_RULES = {
     "ema_fast": 9,
     "ema_slow": 21,
     "ema_trend": 50,
-    "rsi_period": 14,
+    "rsi_period": 20,
     "rsi_call_min": 50.0,
-    "rsi_call_max": 68.0,
-    "rsi_put_min": 32.0,
+    "rsi_call_max": 70.0,
+    "rsi_put_min": 30.0,
     "rsi_put_max": 50.0,
     "macd_fast": 12,
     "macd_slow": 26,

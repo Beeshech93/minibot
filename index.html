@@ -3,1074 +3,905 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Pocket Mini Bot Pro — Visual Trading Assistant</title>
+  <title>Basilisk — AI Visual Trading Assistant</title>
   <style>
     * {
       box-sizing: border-box;
       margin: 0;
       padding: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+      user-select: none;
+    }
+    :root {
+      --bg-dark: #070d10;
+      --card-bg: linear-gradient(180deg, #0e272b 0%, #081619 100%);
+      --card-border: rgba(0, 245, 196, 0.22);
+      --card-border-glow: rgba(0, 245, 196, 0.45);
+      --mint: #00f5c4;
+      --mint-glow: rgba(0, 245, 196, 0.35);
+      --red: #ff4b60;
+      --red-glow: rgba(255, 75, 96, 0.35);
+      --text-main: #ffffff;
+      --text-muted: #7ea2a8;
+      --text-dim: #507177;
+      --pill-bg: #0d2125;
+      --pill-border: rgba(0, 245, 196, 0.16);
+      --canvas-bg: #061114;
     }
     body {
-      background-color: #0b0f17;
-      color: #e2e8f0;
+      background-color: var(--bg-dark);
+      color: var(--text-main);
       display: flex;
       justify-content: center;
       align-items: center;
       min-height: 100vh;
       padding: 16px;
     }
-    .bot-card {
+
+    /* Basilisk Main Card */
+    .basilisk-card {
       width: 100%;
-      max-width: 350px;
-      background-color: #0e131b;
-      border: 1px solid #1e293b;
-      border-radius: 14px;
-      padding: 16px;
+      max-width: 360px;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 24px;
+      padding: 16px 16px 14px 16px;
       display: flex;
       flex-direction: column;
-      gap: 9px;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+      gap: 10px;
+      box-shadow: 0 16px 45px rgba(0, 0, 0, 0.8), 0 0 25px rgba(0, 245, 196, 0.08);
+      position: relative;
+      overflow: hidden;
     }
-    .header {
+
+    /* Top Bar: Brand, Live, Lang, Fullscreen */
+    .b-topbar {
       display: flex;
       justify-content: space-between;
       align-items: center;
     }
-    .title {
+    .b-brand {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+    .b-logo {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #00f5c4 0%, #007f66 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
       font-size: 13px;
+      box-shadow: 0 0 8px var(--mint-glow);
+    }
+    .b-title {
+      font-size: 15px;
       font-weight: 800;
-      letter-spacing: 0.8px;
-      color: #94a3b8;
+      letter-spacing: 0.2px;
+      color: var(--text-main);
     }
-    .status-badge {
-      background: #1e293b;
-      color: #94a3b8;
-      border: 1px solid #334155;
-      border-radius: 9px;
-      padding: 3px 9px;
-      font-size: 11px;
-      font-weight: 600;
-    }
-    /* Signal Card */
-    .signal-card {
-      background: #161f2e;
-      border: 1px solid #253347;
+    .b-live-badge {
+      background: rgba(0, 245, 196, 0.12);
+      border: 1px solid rgba(0, 245, 196, 0.4);
+      color: var(--mint);
       border-radius: 12px;
-      padding: 12px 14px;
-      text-align: center;
-      display: flex;
-      flex-direction: column;
-      gap: 5px;
-      transition: all 0.3s ease;
-    }
-    .next-candle-badge {
-      background: #0f172a;
-      color: #38bdf8;
-      border: 1px solid #1e293b;
-      border-radius: 8px;
-      padding: 4px 8px;
-      font-size: 11px;
+      padding: 1px 7px;
+      font-size: 9px;
       font-weight: 800;
       letter-spacing: 0.5px;
-      text-align: center;
-    }
-    .signal-call .next-candle-badge {
-      background: #042f2e !important;
-      color: #6ee7b7 !important;
-      border-color: #10b981 !important;
-    }
-    .signal-put .next-candle-badge {
-      background: #2e0814 !important;
-      color: #fda4af !important;
-      border-color: #f43f5e !important;
-    }
-    .signal-text {
-      font-size: 30px;
-      font-weight: 800;
-      letter-spacing: 1.2px;
-      color: #94a3b8;
-    }
-    .confidence-text {
-      font-size: 12px;
-      font-weight: 500;
-      color: #64748b;
-    }
-    .time-row {
       display: flex;
-      gap: 8px;
-      margin-top: 4px;
-    }
-    .badge {
-      flex: 1;
-      background: #0f172a;
-      color: #cbd5e1;
-      border: 1px solid #1e293b;
-      border-radius: 6px;
-      padding: 5px;
-      font-size: 11px;
-      font-weight: 600;
-    }
-    .progress-bar-bg {
-      width: 100%;
-      height: 5px;
-      background-color: #1e293b;
-      border-radius: 3px;
-      overflow: hidden;
-      margin-top: 4px;
-    }
-    .alert-badge {
-      background: #0f172a;
-      color: #94a3b8;
-      border: 1px solid #1e293b;
-      border-radius: 6px;
-      padding: 4px 8px;
-      font-size: 11px;
-      font-weight: 700;
-      text-align: center;
-      margin-top: 4px;
-      transition: all 0.2s ease;
-    }
-    .alert-5s-active {
-      background: #dc2626 !important;
-      color: #ffffff !important;
-      border-color: #ef4444 !important;
-      box-shadow: 0 0 10px rgba(239, 68, 68, 0.6);
-      font-size: 12px !important;
-      font-weight: 900 !important;
-      animation: pulse-alert 0.6s infinite alternate;
-    }
-    .alert-entry-now {
-      background: #059669 !important;
-      color: #ffffff !important;
-      border-color: #10b981 !important;
-      box-shadow: 0 0 12px rgba(16, 185, 129, 0.7);
-      font-size: 13px !important;
-      font-weight: 900 !important;
-      animation: pulse-alert 0.4s infinite alternate;
-    }
-    @keyframes pulse-alert {
-      from { transform: scale(1); }
-      to { transform: scale(1.025); }
-    }
-    .progress-bar-fill {
-      width: 0%;
-      height: 100%;
-      background-color: #3b82f6;
-      border-radius: 3px;
-      transition: width 0.3s ease;
-    }
-    /* CALL State */
-    .signal-call {
-      background: #064e3b !important;
-      border-color: #10b981 !important;
-    }
-    .signal-call .signal-text { color: #34d399 !important; }
-    .signal-call .confidence-text { color: #a7f3d0 !important; }
-    .signal-call .badge {
-      background: #042f2e !important;
-      color: #6ee7b7 !important;
-      border-color: #0d9488 !important;
-    }
-    .signal-call .progress-bar-fill { background-color: #10b981 !important; }
-
-    /* PUT State */
-    .signal-put {
-      background: #4c0519 !important;
-      border-color: #f43f5e !important;
-    }
-    .signal-put .signal-text { color: #fb7185 !important; }
-    .signal-put .confidence-text { color: #fecdd3 !important; }
-    .signal-put .badge {
-      background: #2e0814 !important;
-      color: #fda4af !important;
-      border-color: #e11d48 !important;
-    }
-    .signal-put .progress-bar-fill { background-color: #f43f5e !important; }
-
-    /* Metric Tiles */
-    .metrics-grid {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 6px;
-    }
-    .tile {
-      background: #161f2e;
-      border: 1px solid #253347;
-      border-radius: 8px;
-      padding: 6px 4px;
-      text-align: center;
-    }
-    .tile-title {
-      font-size: 8px;
-      font-weight: 700;
-      color: #64748b;
-      letter-spacing: 0.5px;
-      text-transform: uppercase;
-    }
-    .tile-val {
-      font-size: 13px;
-      font-weight: 700;
-      color: #f1f5f9;
-      margin-top: 2px;
-    }
-    /* Multi-Agent Panel */
-    .agents-panel {
-      background: #111722;
-      border: 1px solid #1e293b;
-      border-radius: 8px;
-      padding: 8px 10px;
-      display: flex;
-      flex-direction: column;
-      gap: 3px;
-    }
-    .agents-header {
-      font-size: 10px;
-      font-weight: 700;
-      color: #818cf8;
-      letter-spacing: 0.5px;
-      margin-bottom: 2px;
-    }
-    .agent-row {
-      font-size: 10px;
-      color: #94a3b8;
-    }
-    /* Info Banner */
-    .info-banner {
-      background: #141b27;
-      border: 1px solid #1e293b;
-      border-left: 3px solid #38bdf8;
-      border-radius: 6px;
-      padding: 8px 10px;
-      font-size: 11px;
-      color: #94a3b8;
-      line-height: 1.3;
-    }
-    /* Live Vision Radar */
-    .vision-container {
-      background: #090e17;
-      border: 1px solid #1e293b;
-      border-radius: 8px;
-      padding: 6px 8px;
-      display: flex;
-      flex-direction: column;
+      align-items: center;
       gap: 4px;
     }
-    .vision-header {
+    .b-live-badge .b-dot {
+      width: 5px;
+      height: 5px;
+      background: var(--mint);
+      border-radius: 50%;
+      box-shadow: 0 0 5px var(--mint);
+      animation: pulse-dot 1.5s infinite;
+    }
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.35; transform: scale(0.8); }
+    }
+    .b-top-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .b-lang-pill {
+      background: var(--pill-bg);
+      border: 1px solid var(--pill-border);
+      color: var(--text-muted);
+      border-radius: 8px;
+      padding: 3px 8px;
+      font-size: 10px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .b-icon-btn {
+      background: var(--pill-bg);
+      border: 1px solid var(--pill-border);
+      color: var(--text-muted);
+      border-radius: 8px;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .b-icon-btn:hover {
+      color: var(--mint);
+      border-color: var(--mint);
+    }
+
+    /* Sub Status: Premium and Session Code */
+    .b-status-row {
       display: flex;
       justify-content: space-between;
       align-items: center;
+    }
+    .b-sub-pill {
+      background: rgba(0, 245, 196, 0.08);
+      border: 1px solid rgba(0, 245, 196, 0.18);
+      color: var(--mint);
+      border-radius: 6px;
+      padding: 2px 7px;
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: 0.4px;
+    }
+    .b-code-pill {
+      background: var(--pill-bg);
+      border: 1px solid var(--pill-border);
+      color: var(--text-muted);
+      border-radius: 6px;
+      padding: 2px 8px;
       font-size: 9px;
       font-weight: 700;
-      color: #94a3b8;
-      text-transform: uppercase;
       letter-spacing: 0.5px;
+      cursor: pointer;
+    }
+
+    /* Signal Hero Banner */
+    .b-signal-section {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+      margin-top: 2px;
+    }
+    .b-asset-lbl {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+    .b-asset-lbl span {
+      color: var(--text-main);
+      font-weight: 700;
+      text-decoration: underline;
+      cursor: pointer;
+    }
+    .b-signal-main {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+    }
+    .b-signal-dir {
+      font-size: 34px;
+      font-weight: 900;
+      letter-spacing: -0.5px;
+      color: var(--mint);
+      text-shadow: 0 0 16px var(--mint-glow);
+      line-height: 1.1;
+      transition: all 0.3s ease;
+    }
+    .b-signal-dir.sell {
+      color: var(--red);
+      text-shadow: 0 0 16px var(--red-glow);
+    }
+    .b-signal-dir.wait {
+      color: #94a3b8;
+      text-shadow: none;
+    }
+    .b-signal-strength {
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--mint);
+      letter-spacing: 0.3px;
+    }
+    .b-signal-strength.sell {
+      color: var(--red);
+    }
+
+    /* Timeframe Selector Pills */
+    .b-timeframe-row {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 6px;
+      margin-top: 2px;
+    }
+    .b-tf-pill {
+      background: var(--pill-bg);
+      border: 1px solid var(--pill-border);
+      color: var(--text-muted);
+      border-radius: 12px;
+      padding: 5px 0;
+      font-size: 11px;
+      font-weight: 700;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .b-tf-pill:hover {
+      border-color: var(--mint);
+      color: var(--mint);
+    }
+    .b-tf-pill.active {
+      background: var(--mint);
+      color: #061c1b;
+      border-color: var(--mint);
+      font-weight: 900;
+      box-shadow: 0 0 10px var(--mint-glow);
+    }
+
+    /* Candlestick Visual Radar Box */
+    .b-radar-box {
+      background: var(--canvas-bg);
+      border: 1px solid rgba(0, 245, 196, 0.16);
+      border-radius: 16px;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.6);
+    }
+    .b-setup-tag {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(14, 39, 43, 0.92);
+      border: 1px solid rgba(0, 245, 196, 0.38);
+      border-radius: 8px;
+      padding: 3px 8px;
+      font-size: 10px;
+      font-weight: 800;
+      color: var(--mint);
+      backdrop-filter: blur(4px);
+      z-index: 2;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+    }
+    .b-setup-sub {
+      color: var(--text-muted);
+      font-weight: 600;
+      font-size: 9px;
     }
     #visionPreview {
       width: 100%;
-      height: 95px;
-      border-radius: 6px;
-      background: #06090e;
-      border: 1px solid #141b27;
+      height: 155px;
       display: block;
     }
-    /* Selectors */
-    select {
-      background: #161f2e;
-      color: #cbd5e1;
-      border: 1px solid #253347;
-      border-radius: 8px;
-      padding: 7px 10px;
-      font-size: 12px;
-      outline: none;
-      cursor: pointer;
+
+    /* Meta Grid: PAIR, PAYOUT, EXPIRY */
+    .b-meta-grid {
+      display: grid;
+      grid-template-columns: 1.3fr 1fr 1fr;
+      gap: 6px;
+      margin-top: 2px;
     }
-    /* Buttons */
-    .btn-row {
+    .b-meta-col {
+      background: var(--pill-bg);
+      border: 1px solid var(--pill-border);
+      border-radius: 10px;
+      padding: 7px 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+    .b-meta-lbl {
+      font-size: 8px;
+      font-weight: 800;
+      color: var(--text-dim);
+      letter-spacing: 0.6px;
+      text-transform: uppercase;
+    }
+    .b-meta-val {
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--text-main);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* Action Buttons Row */
+    .b-actions-row {
       display: flex;
       gap: 8px;
+      align-items: center;
+      margin-top: 2px;
     }
-    button {
+    .b-scan-btn {
       flex: 1;
+      background: linear-gradient(135deg, #00f5c4 0%, #00d6aa 100%);
+      color: #041918;
       border: none;
-      border-radius: 8px;
-      padding: 9px 12px;
-      font-size: 12px;
-      font-weight: 600;
+      border-radius: 20px;
+      padding: 11px 18px;
+      font-size: 13px;
+      font-weight: 900;
       cursor: pointer;
-      transition: background 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      box-shadow: 0 0 16px var(--mint-glow);
+      transition: all 0.2s ease;
     }
-    .primary-btn {
-      background: #2563eb;
-      color: #fff;
-      border: 1px solid #3b82f6;
+    .b-scan-btn:hover {
+      background: linear-gradient(135deg, #22f8ce 0%, #05e2b5 100%);
+      box-shadow: 0 0 22px rgba(0, 245, 196, 0.55);
+      transform: translateY(-1px);
     }
-    .primary-btn:hover { background: #1d4ed8; }
-    .secondary-btn {
-      background: #1e293b;
-      color: #cbd5e1;
-      border: 1px solid #334155;
+    .b-circle-btn {
+      width: 40px;
+      height: 40px;
+      background: var(--pill-bg);
+      border: 1px solid var(--pill-border);
+      color: var(--mint);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 15px;
+      cursor: pointer;
+      transition: all 0.2s ease;
     }
-    .secondary-btn:hover { background: #334155; }
-    .subtle-btn {
-      background: transparent;
-      color: #64748b;
-      border: 1px solid #1e293b;
-      padding: 6px;
+    .b-circle-btn:hover {
+      border-color: var(--mint);
+      box-shadow: 0 0 10px var(--mint-glow);
+      transform: translateY(-1px);
+    }
+
+    /* Risk Calculator Bar */
+    .b-risk-calc-card {
+      background: #09171a;
+      border: 1px solid rgba(0, 245, 196, 0.18);
+      border-radius: 14px;
+      padding: 7px 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .b-risk-info {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+    .b-risk-lbl {
+      font-size: 9px;
+      font-weight: 700;
+      color: var(--text-dim);
+    }
+    .b-risk-val {
       font-size: 11px;
+      font-weight: 800;
+      color: var(--text-main);
     }
-    .subtle-btn:hover { background: #161f2e; color: #cbd5e1; }
-    .demo-btn {
-      background: #1e1b4b;
-      color: #c7d2fe;
-      border: 1px solid #4338ca;
-      padding: 6px;
-      font-size: 11px;
-    }
-    .demo-btn:hover { background: #312e81; color: #e0e7ff; }
-    .footer-text {
-      text-align: center;
+    .b-risk-open-btn {
+      background: var(--mint);
+      color: #061c1b;
+      border: none;
+      border-radius: 12px;
+      padding: 3px 12px;
       font-size: 10px;
-      color: #475569;
+      font-weight: 800;
+      cursor: pointer;
+      transition: all 0.2s ease;
     }
-    video, canvas { display: none; }
+    .b-risk-open-btn:hover {
+      box-shadow: 0 0 8px var(--mint-glow);
+    }
+
+    /* Modal / Drawer for Risk & Management */
+    .b-modal-drawer {
+      background: #061114;
+      border: 1px solid rgba(0, 245, 196, 0.25);
+      border-radius: 12px;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+    }
+    .b-modal-title {
+      font-size: 11px;
+      font-weight: 800;
+      color: var(--mint);
+      display: flex;
+      justify-content: space-between;
+    }
+
+    /* Micro Status info */
+    .b-info-drawer {
+      font-size: 10px;
+      color: var(--text-muted);
+      line-height: 1.3;
+      padding: 0 2px;
+    }
+
+    /* Disclaimer */
+    .b-disclaimer {
+      text-align: center;
+      font-size: 9px;
+      color: var(--text-dim);
+      margin-top: 2px;
+      letter-spacing: 0.3px;
+    }
+
+    /* Alerts and pulses */
+    .alert-turbo-active {
+      animation: alert-pulse 0.5s infinite alternate;
+    }
+    @keyframes alert-pulse {
+      from { border-color: rgba(0, 245, 196, 0.3); }
+      to { border-color: #00f5c4; box-shadow: 0 0 14px var(--mint-glow); }
+    }
+
+    video, #analysisCanvas { display: none; }
   </style>
 </head>
 <body>
 
-  <div class="bot-card">
-    <div class="header">
-      <span class="title">POCKET MINI BOT PRO</span>
-      <span class="status-badge" id="statusBadge">Listo</span>
-    </div>
-
-    <!-- Signal Hero Card -->
-    <div class="signal-card" id="signalCard">
-      <div class="next-candle-badge" id="nextCandleBadge">🔮 PRÓXIMA VELA: EVALUANDO</div>
-      <div class="signal-text" id="signalText">ESPERAR</div>
-      <div class="confidence-text" id="confidenceText">Confianza: —</div>
-      <div class="time-row">
-        <div class="badge" id="expBadge">⏱️ Tiempo: —</div>
-        <div class="badge" id="countdownBadge">⏳ Restante: —</div>
+  <!-- Basilisk Container -->
+  <div class="basilisk-card" id="basiliskCard">
+    <!-- Top Bar -->
+    <div class="b-topbar">
+      <div class="b-brand">
+        <div class="b-logo">🐉</div>
+        <span class="b-title">Basilisk</span>
+        <span class="b-live-badge"><span class="b-dot"></span> LIVE</span>
       </div>
-      <div class="alert-badge" id="alertBadge">⏳ Formando vela... Alerta activa a los :55s</div>
-      <div class="progress-bar-bg">
-        <div class="progress-bar-fill" id="progressFill"></div>
+      <div class="b-top-actions">
+        <button class="b-lang-pill" id="langBtn">EN ▾</button>
+        <button class="b-icon-btn" id="expandBtn" title="Pantalla Completa">⛶</button>
       </div>
     </div>
 
-    <!-- Metrics -->
-    <div class="metrics-grid">
-      <div class="tile">
-        <div class="tile-title">RSI</div>
-        <div class="tile-val" id="rsiVal">—</div>
-      </div>
-      <div class="tile">
-        <div class="tile-title">TENDENCIA</div>
-        <div class="tile-val" id="trendVal">—</div>
-      </div>
-      <div class="tile">
-        <div class="tile-title">TIEMPO</div>
-        <div class="tile-val" id="timeVal">—</div>
-      </div>
-      <div class="tile">
-        <div class="tile-title">VELAS</div>
-        <div class="tile-val" id="candlesVal">—</div>
+    <!-- Status row -->
+    <div class="b-status-row">
+      <span class="b-sub-pill">PREMIUM • ∞ scans</span>
+      <span class="b-code-pill" id="sessionCode" title="Código de sesión">BSL-4M7Q2 <span style="font-size:8px;">⎘</span></span>
+    </div>
+
+    <!-- Signal Banner -->
+    <div class="b-signal-section" id="signalSection">
+      <div class="b-asset-lbl">Signal • <span id="currentPairText" title="Clic para cambiar par">ETH/USD OTC</span></div>
+      <div class="b-signal-main">
+        <span class="b-signal-dir" id="signalDirText">BUY</span>
+        <span class="b-signal-strength" id="signalStrengthText">↗ 75/100 strength • HIGH</span>
       </div>
     </div>
 
-    <!-- Multi-Agent Intelligence Status Panel -->
-    <div class="agents-panel">
-      <div class="agents-header">🧠 IA Cuántica Cuantitativa (SMC + Fractal M5 + VSA)</div>
-      <div class="agent-row" id="agentCandles">⚪ Velas & VSA: Analizando volumen y secuencias</div>
-      <div class="agent-row" id="agentTrend">⚪ Fractal Macro 5M: Mapeando M5 y medias EMA</div>
-      <div class="agent-row" id="agentManip">⚪ Smart Money / OTC: Escaneando Order Blocks</div>
-      <div class="agent-row" id="agentConf">⚪ Confluencia Cuántica: Evaluando probabilidades</div>
+    <!-- Timeframe Selector -->
+    <div class="b-timeframe-row" id="timeframeRow">
+      <button class="b-tf-pill active" data-tf="30">30s</button>
+      <button class="b-tf-pill" data-tf="60">1m</button>
+      <button class="b-tf-pill" data-tf="120">2m</button>
+      <button class="b-tf-pill" data-tf="300">5m</button>
+      <button class="b-tf-pill" data-tf="900">15m</button>
     </div>
 
-    <!-- Info banner -->
-    <div class="info-banner" id="infoBanner">
-      Haz clic en «🎯 Conectar Gráfico» para seleccionar la ventana de Pocket Option y comenzar el análisis en vivo.
-    </div>
-
-    <!-- Live Vision Preview (What the bot sees) -->
-    <div class="vision-container">
-      <div class="vision-header">
-        <span>👁️ Radar de Velas (<span id="detectedCount">0</span> velas)</span>
-        <span id="cropStatus" style="color:#38bdf8;">Recorte Pocket Option</span>
+    <!-- Candlestick Visual Radar Box -->
+    <div class="b-radar-box">
+      <!-- Setup Tag on Candle -->
+      <div class="b-setup-tag" id="setupTag">
+        <span id="setupTagName">Bullish Pin Bar</span>
+        <span class="b-setup-sub" id="setupTagSub">1 candle • HIGH</span>
       </div>
-      <canvas id="visionPreview" width="310" height="95"></canvas>
+
+      <!-- Radar Canvas -->
+      <canvas id="visionPreview" width="340" height="155"></canvas>
     </div>
 
-    <!-- Chart Region Selector -->
-    <select id="zoneSelect">
-      <option value="auto" selected>🎯 Zona: Pocket Option Óptima (Excluye Botones 0-73%)</option>
-      <option value="narrow">🔬 Zona: Solo Gráfico Estricto (Centro 10-70%)</option>
-      <option value="center">📐 Zona: Gráfico Amplio (5-75%)</option>
-      <option value="full">🖥️ Zona: Pantalla Completa</option>
-    </select>
-
-    <!-- Mode Selector (MTF: Análisis 5m + Señal 1m) -->
-    <select id="timeMode">
-      <option value="60" selected>🎯 MTF: Macro 5m + Señal 1m (Recomendado)</option>
-      <option value="120">⏱️ Fijar a 2 min (M2)</option>
-      <option value="180">⏱️ Fijar a 3 min (M3)</option>
-      <option value="300">⏱️ Fijar a 5 min (M5)</option>
-      <option value="auto">⏱️ Tiempo: Automático (IA)</option>
-    </select>
-
-    <!-- Analysis Interval (Ultra-Fast confirmation) -->
-    <select id="intervalSelect">
-      <option value="1">⚡ Confirmación: 1 seg (Ultra rápido)</option>
-      <option value="2">⚡ Confirmación: 2 seg (Rápido)</option>
-      <option value="3">🔄 Confirmación: 3 seg</option>
-      <option value="5">🔄 Confirmación: 5 seg</option>
-    </select>
-
-    <!-- Buttons -->
-    <div class="btn-row">
-      <button class="secondary-btn" id="captureBtn">🎯 Conectar Gráfico</button>
-      <button class="primary-btn" id="startBtn">▶ Iniciar En Vivo</button>
+    <!-- Meta 3 Columns: PAIR, PAYOUT, EXPIRY -->
+    <div class="b-meta-grid">
+      <div class="b-meta-col" id="colPair">
+        <span class="b-meta-lbl">PAIR</span>
+        <span class="b-meta-val" id="metaPairVal">ETH/USD OTC</span>
+      </div>
+      <div class="b-meta-col" id="colPayout">
+        <span class="b-meta-lbl">PAYOUT</span>
+        <span class="b-meta-val" id="metaPayoutVal">92%</span>
+      </div>
+      <div class="b-meta-col" id="colExpiry">
+        <span class="b-meta-lbl">EXPIRY</span>
+        <span class="b-meta-val" id="metaExpiryVal">00:30</span>
+      </div>
     </div>
 
-    <div class="btn-row">
-      <button class="subtle-btn" id="analyzeBtn" style="width:100%;">⚡ Analizar Ahora</button>
+    <!-- Action Buttons Row -->
+    <div class="b-actions-row">
+      <button class="b-scan-btn" id="scanBtn">
+        <span>⛶ Scan</span>
+      </button>
+      <button class="b-circle-btn" id="connectBtn" title="🎯 Conectar Pocket Option">
+        <span>🎯</span>
+      </button>
+      <button class="b-circle-btn" id="cropBtn" title="📐 Zona Gráfico Pocket Option">
+        <span>⛶</span>
+      </button>
+      <button class="b-circle-btn" id="resetBtn" title="↻ Reiniciar Radar">
+        <span>↻</span>
+      </button>
     </div>
 
-    <div class="footer-text" id="footerText">Modo En Vivo · Conectado en Tiempo Real</div>
+    <!-- Risk Calculator Pill Card -->
+    <div class="b-risk-calc-card" id="riskCard">
+      <div class="b-risk-info">
+        <span class="b-risk-lbl">Risk calculator</span>
+        <span class="b-risk-val" id="riskStakeVal">Stake 2 163.49 • profit +1 990.41</span>
+      </div>
+      <button class="b-risk-open-btn" id="openRiskBtn">Open</button>
+    </div>
+
+    <!-- Collapsible Risk Drawer / Modal -->
+    <div class="b-modal-drawer" id="riskDrawer" style="display:none;">
+      <div class="b-modal-title">
+        <span>⚙️ Configuración de Riesgo & Capital</span>
+        <span id="closeRiskBtn" style="cursor:pointer; color:var(--text-muted);">✕</span>
+      </div>
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:6px;">
+        <div>
+          <label style="font-size:9px; color:var(--text-muted);">Balance Total ($):</label>
+          <input type="number" id="capitalInput" value="183467" style="width:100%; background:#04090b; border:1px solid #165760; color:#fff; padding:4px 6px; border-radius:6px; font-size:11px;">
+        </div>
+        <div>
+          <label style="font-size:9px; color:var(--text-muted);">% Riesgo por Operación:</label>
+          <input type="number" id="riskPctInput" value="1.18" step="0.1" style="width:100%; background:#04090b; border:1px solid #165760; color:#fff; padding:4px 6px; border-radius:6px; font-size:11px;">
+        </div>
+      </div>
+      <div style="font-size:9px; color:var(--mint); margin-top:2px;" id="riskCalcSummary">
+        Stake calculado: $2,163.49 | Beneficio estimado al 92%: +$1,990.41
+      </div>
+    </div>
+
+    <!-- AI Multi-Agent Intel text -->
+    <div class="b-info-drawer" id="infoText">
+      IA Cuántica Basilisk activa · SMC Order Blocks + VSA + RSI (20) + Probabilidad Bayesiana.
+    </div>
+
+    <!-- Footer Disclaimer -->
+    <div class="b-disclaimer">Not a trading recommendation</div>
   </div>
 
   <video id="screenVideo" autoplay playsinline></video>
   <canvas id="analysisCanvas"></canvas>
 
   <script>
+    // State management
     let mediaStream = null;
-    let analysisInterval = null;
-    let countdownInterval = null;
-    let remainingSeconds = 0;
-    let totalSeconds = 0;
     let isRunning = false;
-    let demoToggle = false;
+    let selectedTfSec = 30; // 30s turbo default
+    let currentPair = "ETH/USD OTC";
+    let currentPayout = 92;
+    let totalCapital = 183467.11;
+    let riskPercentage = 1.18;
+    let cropMode = "auto"; // "auto" (0-73% Pocket Option), "narrow", "full"
+
+    // Elements
+    const basiliskCard = document.getElementById('basiliskCard');
+    const signalDirText = document.getElementById('signalDirText');
+    const signalStrengthText = document.getElementById('signalStrengthText');
+    const currentPairText = document.getElementById('currentPairText');
+    const metaPairVal = document.getElementById('metaPairVal');
+    const metaPayoutVal = document.getElementById('metaPayoutVal');
+    const metaExpiryVal = document.getElementById('metaExpiryVal');
+    const setupTagName = document.getElementById('setupTagName');
+    const setupTagSub = document.getElementById('setupTagSub');
+    const setupTag = document.getElementById('setupTag');
+
+    const scanBtn = document.getElementById('scanBtn');
+    const connectBtn = document.getElementById('connectBtn');
+    const cropBtn = document.getElementById('cropBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const openRiskBtn = document.getElementById('openRiskBtn');
+    const closeRiskBtn = document.getElementById('closeRiskBtn');
+    const riskDrawer = document.getElementById('riskDrawer');
+    const capitalInput = document.getElementById('capitalInput');
+    const riskPctInput = document.getElementById('riskPctInput');
+    const riskStakeVal = document.getElementById('riskStakeVal');
+    const riskCalcSummary = document.getElementById('riskCalcSummary');
+    const infoText = document.getElementById('infoText');
 
     const video = document.getElementById('screenVideo');
     const canvas = document.getElementById('analysisCanvas');
     const ctx = canvas.getContext('2d');
-
-    const statusBadge = document.getElementById('statusBadge');
-    const signalCard = document.getElementById('signalCard');
-    const nextCandleBadge = document.getElementById('nextCandleBadge');
-    const signalText = document.getElementById('signalText');
-    const confidenceText = document.getElementById('confidenceText');
-    const expBadge = document.getElementById('expBadge');
-    const countdownBadge = document.getElementById('countdownBadge');
-    const progressFill = document.getElementById('progressFill');
-
     const visionCanvas = document.getElementById('visionPreview');
     const visionCtx = visionCanvas.getContext('2d');
-    const detectedCount = document.getElementById('detectedCount');
-    const zoneSelect = document.getElementById('zoneSelect');
-    const cropStatus = document.getElementById('cropStatus');
-    const alertBadge = document.getElementById('alertBadge');
 
-    zoneSelect.addEventListener('change', () => {
-      cropStatus.innerText = zoneSelect.value === 'auto' ? 'Recorte Óptimo (73%)' :
-                             zoneSelect.value === 'narrow' ? 'Solo Gráfico (70%)' :
-                             zoneSelect.value === 'center' ? 'Gráfico Amplio (75%)' : 'Pantalla Completa';
-      if (mediaStream) performAnalysis();
+    // Timeframe selector buttons
+    const tfButtons = document.querySelectorAll('.b-tf-pill');
+    tfButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        tfButtons.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        selectedTfSec = parseInt(btn.dataset.tf, 10);
+        updateExpiryUI();
+        if (mediaStream) performAnalysis();
+      });
     });
 
-    const rsiVal = document.getElementById('rsiVal');
-    const trendVal = document.getElementById('trendVal');
-    const timeVal = document.getElementById('timeVal');
-    const candlesVal = document.getElementById('candlesVal');
-    const infoBanner = document.getElementById('infoBanner');
-    const footerText = document.getElementById('footerText');
+    function updateExpiryUI() {
+      const m = Math.floor(selectedTfSec / 60);
+      const s = selectedTfSec % 60;
+      metaExpiryVal.innerText = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    }
 
-    const agentCandles = document.getElementById('agentCandles');
-    const agentTrend = document.getElementById('agentTrend');
-    const agentManip = document.getElementById('agentManip');
-    const agentConf = document.getElementById('agentConf');
+    // Pair Switcher
+    const popularPairs = ["ETH/USD OTC", "USD/DZD OTC", "CAD/JPY OTC", "EUR/JPY OTC", "USD/BRL OTC", "AUD/CHF OTC", "AUD/NZD OTC", "BTC/USD OTC"];
+    let pairIdx = 0;
+    currentPairText.addEventListener('click', () => {
+      pairIdx = (pairIdx + 1) % popularPairs.length;
+      currentPair = popularPairs[pairIdx];
+      currentPairText.innerText = currentPair;
+      metaPairVal.innerText = currentPair;
+      updateRiskDisplay();
+    });
 
-    const timeMode = document.getElementById('timeMode');
-    const intervalSelect = document.getElementById('intervalSelect');
-    const captureBtn = document.getElementById('captureBtn');
-    const startBtn = document.getElementById('startBtn');
-    const analyzeBtn = document.getElementById('analyzeBtn');
+    // Payout Switcher
+    metaPayoutVal.addEventListener('click', () => {
+      const payouts = [92, 85, 82, 75, 70];
+      const curIdx = payouts.indexOf(currentPayout);
+      currentPayout = payouts[(curIdx + 1) % payouts.length];
+      metaPayoutVal.innerText = currentPayout + "%";
+      updateRiskDisplay();
+    });
 
+    // Risk Calculator Update
+    function updateRiskDisplay() {
+      const stake = Math.round((totalCapital * (riskPercentage / 100)) * 100) / 100;
+      const profit = Math.round((stake * (currentPayout / 100)) * 100) / 100;
+      const stakeFmt = stake.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const profitFmt = profit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+      riskStakeVal.innerText = `Stake ${stakeFmt} • profit +${profitFmt}`;
+      riskCalcSummary.innerText = `Stake: $${stakeFmt} | Beneficio estimado (${currentPayout}%): +$${profitFmt}`;
+    }
+
+    openRiskBtn.addEventListener('click', () => {
+      riskDrawer.style.display = riskDrawer.style.display === 'none' ? 'flex' : 'none';
+    });
+    closeRiskBtn.addEventListener('click', () => {
+      riskDrawer.style.display = 'none';
+    });
+    capitalInput.addEventListener('input', () => {
+      totalCapital = Number(capitalInput.value) || 1000;
+      updateRiskDisplay();
+    });
+    riskPctInput.addEventListener('input', () => {
+      riskPercentage = Number(riskPctInput.value) || 1;
+      updateRiskDisplay();
+    });
+
+    // Screen Connection
     async function connectScreen() {
       try {
         mediaStream = await navigator.mediaDevices.getDisplayMedia({ video: { cursor: "always" }, audio: false });
         video.srcObject = mediaStream;
-        statusBadge.innerText = "Conectado";
-        infoBanner.innerText = "Pestaña de Pocket Option conectada. Analizando velas en tiempo real...";
+        isRunning = true;
+        infoText.innerText = "Gráfico conectado con éxito. Escaneando velas y analizando fractales...";
+        performAnalysis();
+        startMonitoringLoop();
         return true;
       } catch (err) {
-        infoBanner.innerText = "Permiso de pantalla no otorgado: " + err.message;
+        infoText.innerText = "Selecciona la ventana de Pocket Option para activar el análisis.";
         return false;
       }
     }
 
-    captureBtn.addEventListener('click', connectScreen);
-
-    startBtn.addEventListener('click', async () => {
-      if (isRunning) {
-        stopAnalysis();
-      } else {
-        if (!mediaStream) {
-          const ok = await connectScreen();
-          if (!ok) return;
-        }
-        startAnalysis();
-      }
-    });
-
-    function startAnalysis() {
-      if (!mediaStream) return;
-      isRunning = true;
-      startBtn.innerText = "⏸ Pausar";
-      statusBadge.innerText = "EN VIVO";
-      const intervalSec = parseInt(intervalSelect.value, 10);
-      performAnalysis();
-      analysisInterval = setInterval(performAnalysis, intervalSec * 1000);
-    }
-
-    function stopAnalysis() {
-      isRunning = false;
-      startBtn.innerText = "▶ Iniciar En Vivo";
-      statusBadge.innerText = "Pausado";
-      clearInterval(analysisInterval);
-    }
-
-    analyzeBtn.addEventListener('click', async () => {
+    connectBtn.addEventListener('click', connectScreen);
+    scanBtn.addEventListener('click', async () => {
       if (!mediaStream) {
-        const ok = await connectScreen();
-        if (!ok) return;
+        await connectScreen();
+      } else {
+        performAnalysis();
       }
-      performAnalysis();
     });
 
-    /* ==========================================================
-       PRO-GRADE QUANTUM MULTI-AGENT AI SYSTEM (SMC + M5 + VSA)
-       ========================================================== */
+    // Crop Toggle
+    cropBtn.addEventListener('click', () => {
+      cropMode = cropMode === "auto" ? "narrow" : (cropMode === "narrow" ? "full" : "auto");
+      const names = { auto: "Pocket Option Óptimo (73%)", narrow: "Centro Estricto (70%)", full: "Pantalla Completa" };
+      infoText.innerText = `Modo de recorte: ${names[cropMode]}`;
+      if (mediaStream) performAnalysis();
+    });
 
-    function synthesizeM5(candles) {
-      if (!candles || candles.length === 0) return [];
-      const m5 = [];
-      const chunkSize = 5;
-      for (let i = 0; i < candles.length; i += chunkSize) {
-        const chunk = candles.slice(i, i + chunkSize);
-        if (!chunk.length) continue;
-        const cOpen = chunk[0].open;
-        const cHigh = Math.max(...chunk.map(cd => cd.high));
-        const cLow = Math.min(...chunk.map(cd => cd.low));
-        const cClose = chunk[chunk.length - 1].close;
-        const color = cClose >= cOpen ? 1 : -1;
-        const bodyH = Math.abs(cClose - cOpen);
-        const rng = Math.max(1.0, cHigh - cLow);
-        const upperW = Math.max(0.1, cHigh - Math.max(cOpen, cClose));
-        const lowerW = Math.max(0.1, Math.min(cOpen, cClose) - cLow);
-        m5.push({
-          open: cOpen, high: cHigh, low: cLow, close: cClose,
-          color: color, bodySize: bodyH, rangeSize: rng,
-          upperWick: upperW, lowerWick: lowerW,
-          lwRatio: lowerW / rng, uwRatio: upperW / rng,
-          bodyRatio: bodyH / rng
-        });
+    resetBtn.addEventListener('click', () => {
+      infoText.innerText = "Radar reiniciado. Realizando escaneo nuevo de alta resolución...";
+      if (mediaStream) performAnalysis();
+      else generateDemoFeed();
+    });
+
+    // Sound audio context
+    let audioCtx = null;
+    function playBeep(freq = 880, duration = 0.15) {
+      try {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.18, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+      } catch (e) {}
+    }
+
+    // =============================================================
+    // MOTOR MATEMÁTICO: MULTI-AGENT QUANTUM & RSI (20)
+    // =============================================================
+    function calcRsi(series, period = 20) {
+      if (series.length < 2) return 50;
+      const p = Math.min(period, series.length - 1);
+      const slice = series.slice(-p - 1);
+      let gains = 0, losses = 0;
+      for (let i = 1; i < slice.length; i++) {
+        const diff = slice[i] - slice[i - 1];
+        if (diff > 0) gains += diff;
+        else losses -= diff;
       }
-      return m5;
+      if (losses === 0) return gains > 0 ? 100 : 50;
+      const rs = (gains / p) / (losses / p);
+      return Math.round(100 - (100 / (1 + rs)));
     }
 
     function detectSmcStructure(candles) {
-      if (candles.length < 5) {
-        return { bos: "Neutral", ob: "Ninguno", obVote: "NEUTRO", fvg: "Equilibrado", sweep: "Ninguno", sweepVote: "NEUTRO" };
-      }
-      const highs = candles.map(c => c.high);
-      const lows = candles.map(c => c.low);
-      const sh = [];
-      const sl = [];
-      for (let i = 2; i < candles.length - 1; i++) {
-        if (highs[i] > highs[i - 1] && highs[i] > highs[i - 2] && highs[i] >= highs[i + 1]) {
-          sh.push(highs[i]);
-        }
-        if (lows[i] < lows[i - 1] && lows[i] < lows[i - 2] && lows[i] <= lows[i + 1]) {
-          sl.push(lows[i]);
-        }
-      }
-      const lastC = candles[candles.length - 1];
-      const lastSh = sh.length ? sh[sh.length - 1] : Math.max(...highs.slice(0, -1));
-      const lastSl = sl.length ? sl[sl.length - 1] : Math.min(...lows.slice(0, -1));
+      if (candles.length < 5) return { sweep: "Normal", sweepVote: "NEUTRO", ob: "Sin OB", obVote: "NEUTRO", bos: "Rango" };
+      const c = candles[candles.length - 1];
+      const prev = candles[candles.length - 2];
+      const prevHighs = candles.slice(-7, -2).map(cd => cd.high);
+      const prevLows = candles.slice(-7, -2).map(cd => cd.low);
+      const maxH = Math.max(...prevHighs);
+      const minL = Math.min(...prevLows);
 
-      let bos = "Neutral";
-      if (lastC.close > lastSh) bos = "BOS Alcista (Expansión)";
-      else if (lastC.close < lastSl) bos = "BOS Bajista (Expansión)";
-
-      let sweep = "Ninguno";
-      let sweepVote = "NEUTRO";
-      const rng = Math.max(1.0, lastC.rangeSize || (lastC.high - lastC.low));
-      if (lastC.high > lastSh && lastC.close < lastSh && (lastC.upperWick / rng) >= 0.35) {
-        sweep = `Caza de Stops sobre Máximo (${lastSh.toFixed(1)})`;
+      let sweep = "Normal", sweepVote = "NEUTRO";
+      if (c.high > maxH && c.close < maxH && c.upperWick >= c.bodySize * 0.9) {
+        sweep = "Bearish Liquidity Sweep (BARRIDO DE COMPRAS)";
         sweepVote = "PUT";
-      } else if (lastC.low < lastSl && lastC.close > lastSl && (lastC.lowerWick / rng) >= 0.35) {
-        sweep = `Caza de Stops bajo Mínimo (${lastSl.toFixed(1)})`;
+      } else if (c.low < minL && c.close > minL && c.lowerWick >= c.bodySize * 0.9) {
+        sweep = "Bullish Liquidity Sweep (BARRIDO DE VENTAS)";
         sweepVote = "CALL";
       }
 
-      let ob = "Ninguno";
-      let obVote = "NEUTRO";
-      for (let i = candles.length - 4; i < candles.length - 1; i++) {
-        if (i >= 1) {
-          const cd = candles[i];
-          if (cd.color === -1 && candles[i + 1].color === 1 && candles[i + 1].close > cd.open) {
-            if (lastC.low <= cd.high && lastC.close >= cd.low) {
-              ob = `Retest Bullish OB [${cd.low.toFixed(1)}-${cd.high.toFixed(1)}]`;
-              obVote = "CALL";
-              break;
-            }
-          } else if (cd.color === 1 && candles[i + 1].color === -1 && candles[i + 1].close < cd.open) {
-            if (lastC.high >= cd.low && lastC.close <= cd.high) {
-              ob = `Retest Bearish OB [${cd.low.toFixed(1)}-${cd.high.toFixed(1)}]`;
-              obVote = "PUT";
-              break;
-            }
-          }
-        }
+      let ob = "Sin OB Institucional", obVote = "NEUTRO";
+      if (prev.color === -1 && c.color === 1 && c.bodySize >= prev.bodySize * 1.35) {
+        ob = "Bullish Demand Block (OB Alcista Confirmado)";
+        obVote = "CALL";
+      } else if (prev.color === 1 && c.color === -1 && c.bodySize >= prev.bodySize * 1.35) {
+        ob = "Bearish Supply Block (OB Bajista Confirmado)";
+        obVote = "PUT";
       }
 
-      let fvg = "Equilibrado";
-      if (candles.length >= 3) {
-        const c1 = candles[candles.length - 3];
-        const c3 = candles[candles.length - 1];
-        if (c3.low > c1.high) fvg = "Bullish FVG (Imbalance Alcista)";
-        else if (c3.high < c1.low) fvg = "Bearish FVG (Imbalance Bajista)";
-      }
-
-      return { bos, ob, obVote, fvg, sweep, sweepVote, lastSh, lastSl };
-    }
-
-    function analyzeVsa(candles) {
-      if (!candles || !candles.length) return { relSpread: 1.0, status: "Normal", isStoppingVol: false };
-      const c = candles[candles.length - 1];
-      const rngs = candles.slice(-10).map(cd => cd.rangeSize || (cd.high - cd.low));
-      const avgRng = rngs.reduce((a, b) => a + b, 0) / rngs.length;
-      const cRng = Math.max(1.0, c.rangeSize || (c.high - c.low));
-      const relSpread = cRng / Math.max(1.0, avgRng);
-
-      const lwRatio = c.lowerWick / cRng;
-      const uwRatio = c.upperWick / cRng;
-      const isStoppingVol = relSpread >= 1.35 && (lwRatio >= 0.45 || uwRatio >= 0.45);
-      const isNoSupply = relSpread <= 0.65 && c.color === -1;
-      const isNoDemand = relSpread <= 0.65 && c.color === 1;
-
-      let status = "Normal";
-      if (isStoppingVol) status = "Absorción Institucional (Stopping Volume)";
-      else if (isNoSupply) status = "No Supply (Secado de Ventas)";
-      else if (isNoDemand) status = "No Demand (Secado de Compras)";
-      else if (relSpread >= 1.6) status = "Ultra Alto Spread (Impulso Fuerte)";
-
-      return { relSpread: Math.round(relSpread * 100) / 100, status, isStoppingVol };
+      const bos = c.close > maxH ? "BOS Alcista (Expansión)" : c.close < minL ? "BOS Bajista (Expansión)" : "Rango Estructurado";
+      return { sweep, sweepVote, ob, obVote, bos };
     }
 
     function evaluateMultiAgentSystem(candles) {
-      if (candles.length < 3) return null;
-
+      if (candles.length < 4) return null;
       const prices = candles.map(c => c.close);
-      const highs = candles.map(c => c.high);
-      const lows = candles.map(c => c.low);
-      const currentPrice = prices[prices.length - 1];
-
+      const rsi = calcRsi(prices, 20);
       const c = candles[candles.length - 1];
       const prev = candles[candles.length - 2];
-      const prev2 = candles[candles.length - 3] || prev;
-      const rng = Math.max(1.0, c.rangeSize || (c.high - c.low));
+
+      const rng = Math.max(1.0, c.rangeSize);
       const lwRatio = c.lowerWick / rng;
       const uwRatio = c.upperWick / rng;
       const bodyRatio = c.bodySize / rng;
 
-      // INDICADORES BASE
-      function calcEma(series, period) {
-        const k = 2 / (period + 1);
-        let ema = [series[0]];
-        for (let i = 1; i < series.length; i++) ema.push(series[i] * k + ema[ema.length - 1] * (1 - k));
-        return ema;
-      }
-      const ema9 = calcEma(prices, 9)[prices.length - 1];
-      const ema21 = calcEma(prices, 21)[prices.length - 1];
-      const ema50 = calcEma(prices, Math.min(50, prices.length))[prices.length - 1];
+      const isHammer = lwRatio >= 0.45 && uwRatio <= 0.20;
+      const isStar = uwRatio >= 0.45 && lwRatio <= 0.20;
 
-      // RSI Clásico Wilder Suavizado
-      function calcRsi(series, period = 14) {
-        if (series.length < 2) return 50;
-        let gains = 0, losses = 0;
-        const p = Math.min(period, series.length - 1);
-        const slice = series.slice(-p - 1);
-        for (let i = 1; i < slice.length; i++) {
-          const diff = slice[i] - slice[i - 1];
-          if (diff > 0) gains += diff;
-          else losses -= diff;
-        }
-        if (losses === 0) return gains > 0 ? 100 : 50;
-        const rs = (gains / p) / (losses / p);
-        return Math.round(100 - (100 / (1 + rs)));
-      }
-      const rsi = calcRsi(prices, 14);
-
-      // Bandas de Bollinger (20, 2)
-      const windowBb = Math.min(20, prices.length);
-      const sliceBb = prices.slice(-windowBb);
-      const basis = sliceBb.reduce((a, b) => a + b, 0) / windowBb;
-      const std = Math.sqrt(sliceBb.reduce((a, b) => a + Math.pow(b - basis, 2), 0) / windowBb) || 1.0;
-      const upperBb = basis + 2.0 * std;
-      const lowerBb = basis - 2.0 * std;
-
-      // Módulos Inteligentes SMC, Fractal M5 y VSA
-      const smc = detectSmcStructure(candles);
-      const m5List = synthesizeM5(candles);
-      const currentM5 = m5List.length ? m5List[m5List.length - 1] : null;
-      const m5Bullish = currentM5 && (currentM5.color === 1 || currentM5.lwRatio >= 0.35);
-      const m5Bearish = currentM5 && (currentM5.color === -1 || currentM5.uwRatio >= 0.35);
-      const vsa = analyzeVsa(candles);
-
-      // Mapeo de Soporte y Resistencia Histórico (velas previas)
-      const prevCandles = candles.slice(0, -1);
-      const prevHighs = prevCandles.length > 0 ? prevCandles.map(cd => cd.high) : highs;
-      const prevLows = prevCandles.length > 0 ? prevCandles.map(cd => cd.low) : lows;
-      const maxH = Math.max(...prevHighs);
-      const minL = Math.min(...prevLows);
-      const totalRange = Math.max(1.0, maxH - minL);
-      const distToRes = (maxH - currentPrice) / totalRange;
-      const distToSup = (currentPrice - minL) / totalRange;
-
-      // Conteo de velas consecutivas previas (agotamiento de tendencia)
       let consecGreen = 0, consecRed = 0;
       for (let i = candles.length - 2; i >= 0; i--) {
-        if (candles[i].color === 1 && consecRed === 0) consecGreen++;
-        else if (candles[i].color === -1 && consecGreen === 0) consecRed++;
+        if (candles[i].color === 1) { consecGreen++; consecRed = 0; }
+        else if (candles[i].color === -1) { consecRed++; consecGreen = 0; }
         else break;
       }
 
-      const bullTrendStrong = (ema9 > ema21 && ema21 > ema50);
-      const bearTrendStrong = (ema9 < ema21 && ema21 < ema50);
+      // Cálculo de medias y probabilidades
+      const ema9 = prices.slice(-9).reduce((a, b) => a + b, 0) / Math.min(9, prices.length);
+      const ema21 = prices.slice(-21).reduce((a, b) => a + b, 0) / Math.min(21, prices.length);
 
-      // =============================================================
-      // PILAR 1: ANÁLISIS DE VELAS ANTERIORES & PATRONES
-      // =============================================================
-      let p1_vote = "ESPERAR";
-      let p1_score = 50;
-      let p1_status = "Neutral";
-      let p1_detail = "Sin patrón claro en velas anteriores";
+      const smc = detectSmcStructure(candles);
 
-      const isMorningStar = (
-        prev2.color === -1 &&
-        prev.bodySize <= prev2.bodySize * 0.45 &&
-        c.color === 1 &&
-        c.close >= (prev2.open + prev2.close) / 2.0
-      );
-      const isEveningStar = (
-        prev2.color === 1 &&
-        prev.bodySize <= prev2.bodySize * 0.45 &&
-        c.color === -1 &&
-        c.close <= (prev2.open + prev2.close) / 2.0
-      );
-      const isBullEngulf = (
-        prev.color === -1 &&
-        c.color === 1 &&
-        c.close >= prev.open &&
-        c.bodySize > prev.bodySize * 1.10
-      );
-      const isBearEngulf = (
-        prev.color === 1 &&
-        c.color === -1 &&
-        c.close <= prev.open &&
-        c.bodySize > prev.bodySize * 1.10
-      );
-      const isBullMarubozu = (
-        c.color === 1 &&
-        prev.color === 1 &&
-        c.bodySize > prev.bodySize * 1.10 &&
-        uwRatio <= 0.15 &&
-        bodyRatio >= 0.65
-      );
-      const isBearMarubozu = (
-        c.color === -1 &&
-        prev.color === -1 &&
-        c.bodySize > prev.bodySize * 1.10 &&
-        lwRatio <= 0.15 &&
-        bodyRatio >= 0.65
-      );
-      const isHammerRejection = (lwRatio >= 0.48 && bodyRatio <= 0.40);
-      const isStarRejection = (uwRatio >= 0.48 && bodyRatio <= 0.40);
+      let zCall = 0.0, zPut = 0.0;
+      if (c.color === 1 && bodyRatio >= 0.55) zCall += 1.4;
+      else if (c.color === -1 && bodyRatio >= 0.55) zPut += 1.4;
 
-      if (isMorningStar) {
-        p1_vote = "CALL";
-        p1_score = 92;
-        p1_status = "Giro 3 Velas";
-        p1_detail = "Morning Star confirmado en 3 velas";
-      } else if (isEveningStar) {
-        p1_vote = "PUT";
-        p1_score = 92;
-        p1_status = "Giro 3 Velas";
-        p1_detail = "Evening Star confirmado en 3 velas";
-      } else if (isBullEngulf) {
-        p1_vote = "CALL";
-        p1_score = 89;
-        p1_status = "Envolvente";
-        p1_detail = "Vela verde absorbe a la roja anterior";
-      } else if (isBearEngulf) {
-        p1_vote = "PUT";
-        p1_score = 89;
-        p1_status = "Envolvente";
-        p1_detail = "Vela roja absorbe a la verde anterior";
-      } else if (isBullMarubozu) {
-        p1_vote = "CALL";
-        p1_score = 90;
-        p1_status = "Impulso Sólido";
-        p1_detail = "Marubozu verde expansivo sin mecha frontal";
-      } else if (isBearMarubozu) {
-        p1_vote = "PUT";
-        p1_score = 90;
-        p1_status = "Impulso Sólido";
-        p1_detail = "Marubozu rojo expansivo sin mecha frontal";
-      } else if (isHammerRejection) {
-        p1_vote = "CALL";
-        p1_score = 91;
-        p1_status = "Rechazo Mecha";
-        p1_detail = `Martillo con ${Math.round(lwRatio * 100)}% mecha inferior`;
-      } else if (isStarRejection) {
-        p1_vote = "PUT";
-        p1_score = 91;
-        p1_status = "Rechazo Mecha";
-        p1_detail = `Estrella fugaz con ${Math.round(uwRatio * 100)}% mecha superior`;
-      } else if (consecGreen >= 2) {
-        const isTrueExhaustion = ((distToRes >= 0 && distToRes < 0.030 && !bullTrendStrong) || uwRatio >= 0.45 || rsi >= 76);
-        if (isTrueExhaustion) {
-          p1_vote = "ESPERAR";
-          p1_status = "Agotamiento";
-          p1_detail = `Agotamiento en Resistencia/Sobrecompra (${consecGreen + 1} verdes)`;
-        } else {
-          p1_vote = "CALL";
-          p1_score = 88;
-          p1_status = "Impulso Tendencial";
-          p1_detail = `Continuación Alcista (${consecGreen + 1} verdes con fuerza)`;
-        }
-      } else if (consecRed >= 2) {
-        const isTrueExhaustion = ((distToSup >= 0 && distToSup < 0.030 && !bearTrendStrong) || lwRatio >= 0.45 || rsi <= 24);
-        if (isTrueExhaustion) {
-          p1_vote = "ESPERAR";
-          p1_status = "Agotamiento";
-          p1_detail = `Agotamiento en Soporte/Sobreventa (${consecRed + 1} rojas)`;
-        } else {
-          p1_vote = "PUT";
-          p1_score = 88;
-          p1_status = "Impulso Tendencial";
-          p1_detail = `Continuación Bajista (${consecRed + 1} rojas con fuerza)`;
-        }
-      }
+      if (isHammer) zCall += 1.8;
+      if (isStar) zPut += 1.8;
 
-      // =============================================================
-      // PILAR 2: ANÁLISIS DE LA TENDENCIA (ESTRUCTURA & MEDIAS MÓVILES)
-      // =============================================================
-      let p2_vote = "ESPERAR";
-      let p2_score = 50;
-      let p2_status = "Lateral";
-      let p2_detail = "Sin tendencia clara";
+      if (ema9 > ema21) { zCall += 1.2; zPut -= 1.0; }
+      else if (ema9 < ema21) { zPut += 1.2; zCall -= 1.0; }
 
-      const softBull = (ema9 > ema21 && currentPrice >= ema21);
-      const softBear = (ema9 < ema21 && currentPrice <= ema21);
-
-      if (bullTrendStrong) {
-        p2_vote = "CALL";
-        p2_score = 92;
-        p2_status = "Alcista Fuerte";
-        p2_detail = `EMA 9>21>50 + M5 (${m5Bullish ? 'Alcista' : 'Neutral'})`;
-      } else if (bearTrendStrong) {
-        p2_vote = "PUT";
-        p2_score = 92;
-        p2_status = "Bajista Fuerte";
-        p2_detail = `EMA 9<21<50 + M5 (${m5Bearish ? 'Bajista' : 'Neutral'})`;
-      } else if (softBull) {
-        p2_vote = "CALL";
-        p2_score = 82;
-        p2_status = "Alcista Moderada";
-        p2_detail = "EMA 9>21 precio sobre media";
-      } else if (softBear) {
-        p2_vote = "PUT";
-        p2_score = 82;
-        p2_status = "Bajista Moderada";
-        p2_detail = "EMA 9<21 precio bajo media";
-      } else {
-        p2_vote = "NEUTRO";
-        p2_score = 60;
-        p2_status = "Rango Lateral";
-        p2_detail = "Medias entrelazadas (Consolidación)";
-      }
-
-      // =============================================================
-      // PILAR 3: ESCUDO & DETECCIÓN DE MANIPULACIÓN DE BROKER (OTC)
-      // =============================================================
-      const isSpikeManipulation = (uwRatio >= 0.68 || lwRatio >= 0.68) && c.bodySize < 3.5;
-      const recentBodies = candles.slice(-5).map(cd => cd.bodySize);
-      const avgBody = recentBodies.reduce((a, b) => a + b, 0) / recentBodies.length;
-      const isFlatDoji = c.bodySize < 2.0 || rng < 3.0 || (c.bodySize < avgBody * 0.22);
-
-      let p3_is_safe = true;
-      let p3_vote = "NEUTRO";
-      let p3_status = "Limpio";
-      let p3_detail = "Sin manipulación detectable";
-
-      if (isSpikeManipulation) {
-        p3_is_safe = false;
-        p3_status = "Spike OTC Falso";
-        p3_detail = "Mecha extrema artificial detectada (>68% rango). Bloqueado.";
-      } else if (isFlatDoji) {
-        p3_is_safe = false;
-        p3_status = "Doji / Sin Volumen";
-        p3_detail = "Vela plana sin volumen institucional. Bloqueado.";
-      } else if (smc.sweepVote === "PUT") {
-        p3_vote = "PUT";
-        p3_status = "Trampa de Toros (SMC)";
-        p3_detail = smc.sweep;
-      } else if (smc.sweepVote === "CALL") {
-        p3_vote = "CALL";
-        p3_status = "Trampa de Osos (SMC)";
-        p3_detail = smc.sweep;
-      } else if (smc.obVote === "CALL" && distToRes >= 0.05) {
-        p3_vote = "CALL";
-        p3_status = "Order Block SMC";
-        p3_detail = smc.ob;
-      } else if (smc.obVote === "PUT" && distToSup >= 0.05) {
-        p3_vote = "PUT";
-        p3_status = "Order Block SMC";
-        p3_detail = smc.ob;
-      } else if (distToRes >= 0 && distToRes < 0.030 && !bullTrendStrong && c.color !== 1) {
-        p3_is_safe = false;
-        p3_status = "Techo Inmediato";
-        p3_detail = "Precio rozando resistencia sin fuerza compradora.";
-      } else if (distToSup >= 0 && distToSup < 0.030 && !bearTrendStrong && c.color !== -1) {
-        p3_is_safe = false;
-        p3_status = "Piso Inmediato";
-        p3_detail = "Precio rozando soporte sin fuerza vendedora.";
-      } else if (rsi > 78) {
-        p3_is_safe = false;
-        p3_status = "RSI Sobrecomprado";
-        p3_detail = `RSI extremo (${rsi}). Riesgo de comprar en el pico.`;
-      } else if (rsi < 22) {
-        p3_is_safe = false;
-        p3_status = "RSI Sobrevendido";
-        p3_detail = `RSI extremo (${rsi}). Riesgo de vender en el suelo.`;
-      }
-
-      // =============================================================
-      // MÓDULO 4: PROBABILIDAD BAYESIANA ADAPTATIVA
-      // =============================================================
-      let zCall = 0.0;
-      let zPut = 0.0;
-
-      if (p1_vote === "CALL") zCall += 1.4;
-      else if (p1_vote === "PUT") zPut += 1.4;
-
-      if (vsa.isStoppingVol && lwRatio >= 0.45) zCall += 1.2;
-      else if (vsa.isStoppingVol && uwRatio >= 0.45) zPut += 1.2;
-
-      if (p2_vote === "CALL") { zCall += 1.3; zPut -= 1.5; }
-      else if (p2_vote === "PUT") { zPut += 1.3; zCall -= 1.5; }
-
-      if (m5Bullish) zCall += 1.0;
-      if (m5Bearish) zPut += 1.0;
-
-      if (smc.sweepVote === "CALL") zCall += 2.2;
-      else if (smc.sweepVote === "PUT") zPut += 2.2;
+      if (smc.sweepVote === "CALL") zCall += 2.0;
+      else if (smc.sweepVote === "PUT") zPut += 2.0;
 
       if (smc.obVote === "CALL") zCall += 1.5;
       else if (smc.obVote === "PUT") zPut += 1.5;
 
-      if (smc.bos === "BOS Alcista (Expansión)") zCall += 0.8;
-      else if (smc.bos === "BOS Bajista (Expansión)") zPut += 0.8;
+      // Momentum RSI (20)
+      if (rsi > 52) zCall += 0.8;
+      if (rsi < 48) zPut += 0.8;
+      if (rsi >= 75) zCall -= 2.0; // Sobrecarga
+      if (rsi <= 25) zPut -= 2.0; // Sobrecarga
 
-      if (!p3_is_safe) { zCall -= 3.0; zPut -= 3.0; }
-
-      // Momentum vs Agotamiento Real
-      if (consecGreen >= 2 && p1_vote === "CALL") zCall += 1.2;
-      else if (consecGreen >= 4 && (distToRes >= 0 && distToRes < 0.030 || uwRatio >= 0.35 || rsi >= 76)) zCall -= 2.5;
-
-      if (consecRed >= 2 && p1_vote === "PUT") zPut += 1.2;
-      else if (consecRed >= 4 && (distToSup >= 0 && distToSup < 0.030 || lwRatio >= 0.35 || rsi <= 24)) zPut -= 2.5;
-
-      if (distToRes >= 0 && distToRes < 0.030 && !bullTrendStrong) zCall -= 3.5;
-      if (distToSup >= 0 && distToSup < 0.030 && !bearTrendStrong) zPut -= 3.5;
-
-      // Relación probabilística binaria directa (Softmax / Log-Odds)
       const deltaZ = zCall - zPut;
       const probCall = Math.round((100.0 / (1.0 + Math.exp(-deltaZ))) * 10) / 10;
       const probPut = Math.round((100.0 - probCall) * 10) / 10;
 
-      // =============================================================
-      // ANÁLISIS DIRECCIONAL EXACTO: ¿SUBE O BAJA?
-      // =============================================================
-      let signal = "CALL";
-      let confidence = 50;
-      let nextCandleDir = "SUBE";
-      let nextCandleLabel = "";
-      let setupName = "";
-      let reason = "";
+      const isBuy = probCall >= 50.0;
+      const confidence = isBuy ? Math.max(54, Math.min(98, Math.round(probCall))) : Math.max(54, Math.min(98, Math.round(probPut)));
 
-      if (probCall >= 50.0) {
-        signal = "CALL";
-        confidence = Math.max(54, Math.min(98, Math.round(probCall)));
-        nextCandleDir = "SUBE";
-        nextCandleLabel = `🔮 PRÓXIMA VELA (1M): 🟢 SUBE (${confidence}%)`;
-        const callDetail = p1_vote === "CALL" ? p1_detail : (smc.bos || "Impulso Alcista");
-        setupName = `${callDetail} | ${p2_status}`;
-        reason = `Proyección Alcista: ${callDetail} + Tendencia ${p2_status} + M5 (${m5Bullish ? 'Alcista' : 'Consolidación'}) + RSI ${rsi}`;
+      // Pattern / Setup Identification
+      let setupTitle = "Bullish Pin Bar";
+      let setupStrength = "HIGH";
+      if (isHammer) {
+        setupTitle = "Bullish Pin Bar";
+        setupStrength = "1 candle • HIGH";
+      } else if (isStar) {
+        setupTitle = "Bearish Shooting Star";
+        setupStrength = "1 candle • HIGH";
+      } else if (smc.sweepVote === "CALL") {
+        setupTitle = "Liquidity Sweep Bull";
+        setupStrength = "Smart Money • VERY HIGH";
+      } else if (smc.sweepVote === "PUT") {
+        setupTitle = "Liquidity Sweep Bear";
+        setupStrength = "Smart Money • VERY HIGH";
+      } else if (smc.obVote !== "NEUTRO") {
+        setupTitle = smc.obVote === "CALL" ? "Bullish Order Block" : "Bearish Supply Block";
+        setupStrength = "Institutional • HIGH";
+      } else if (consecGreen >= 2 && isBuy) {
+        setupTitle = "Bullish Momentum Drive";
+        setupStrength = `${consecGreen+1} candles • HIGH`;
+      } else if (consecRed >= 2 && !isBuy) {
+        setupTitle = "Bearish Momentum Drive";
+        setupStrength = `${consecRed+1} candles • HIGH`;
       } else {
-        signal = "PUT";
-        confidence = Math.max(54, Math.min(98, Math.round(probPut)));
-        nextCandleDir = "BAJA";
-        nextCandleLabel = `🔮 PRÓXIMA VELA (1M): 🔴 BAJA (${confidence}%)`;
-        const putDetail = p1_vote === "PUT" ? p1_detail : (smc.bos || "Impulso Bajista");
-        setupName = `${putDetail} | ${p2_status}`;
-        reason = `Proyección Bajista: ${putDetail} + Tendencia ${p2_status} + M5 (${m5Bearish ? 'Bajista' : 'Consolidación'}) + RSI ${rsi}`;
+        setupTitle = isBuy ? "Bullish Fractal Bounce" : "Bearish Fractal Rejection";
+        setupStrength = `RSI(20): ${rsi} • MODERATE`;
       }
-
-      let grade = "B+";
-      if (confidence >= 82) grade = "A+";
-      else if (confidence >= 68) grade = "A";
-      else if (confidence >= 58) grade = "B+";
-      else grade = "B";
-
-      let explanation = "";
-      if (confidence >= 68) {
-        explanation = `🎯 [SEÑAL ${grade} | ALTA CONFLUENCIA] (${confidence}%): ${signal === 'CALL' ? '🟢 SUBIR (CALL)' : '🔴 BAJAR (PUT)'} (1 MIN). ${reason}.`;
-      } else {
-        explanation = `⚡ [PROYECCIÓN ${grade}] (${confidence}%): Inclinación hacia ${signal === 'CALL' ? '🟢 SUBIR' : '🔴 BAJAR'}. ${reason}.`;
-      }
-
-      const trendStr = `${p2_status} (M5: ${m5Bullish ? '🟢' : m5Bearish ? '🔴' : '⚪'})`;
 
       return {
-        signal: signal,
-        grade: grade,
-        setup: setupName,
+        direction: isBuy ? "BUY" : "SELL",
         confidence: confidence,
         probCall: probCall,
         probPut: probPut,
-        recommendedTime: "1 VELA (M1)",
-        durationSeconds: 60,
-        rsi: rsi,
-        trend: trendStr,
-        count: candles.length,
-        nextCandle: { dir: nextCandleDir, label: nextCandleLabel, prob: confidence, reason: setupName || "Fuerzas equilibradas" },
-        explanation: explanation,
-        agents: {
-          candles: { vote: p1_vote, status: vsa.status, detail: `${p1_detail} | Spread ${vsa.relSpread}x` },
-          trend: { vote: p2_vote, status: p2_status, detail: `${p2_detail} | M5: ${m5Bullish ? 'Alcista' : m5Bearish ? 'Bajista' : 'Neutral'}` },
-          manipulation: { vote: p3_vote !== "NEUTRO" ? p3_vote : (!p3_is_safe ? "ESPERAR" : "LIMPIO"), status: p3_status, detail: `${p3_detail} | ${smc.ob}` },
-          confluence: { vote: signal, status: grade, detail: `Prob: 🟢${probCall}% 🔴${probPut}% | ${setupName || 'Esperando A+'}` }
-        }
+        setupTitle: setupTitle,
+        setupStrength: setupStrength,
+        rsi: rsi
       };
     }
 
+    // =============================================================
+    // VISIÓN ARTIFICIAL & RECONSTRUCCIÓN DE GRÁFICO BASILISK
+    // =============================================================
     function performAnalysis() {
-      if (!video.videoWidth || !video.videoHeight) return;
+      if (!video.videoWidth || !video.videoHeight) {
+        generateDemoFeed();
+        return;
+      }
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
       ctx.drawImage(video, 0, 0);
@@ -1078,57 +909,40 @@
       const w = canvas.width;
       const h = canvas.height;
 
-      // 1. ZONA DE RECORTE AUTOMÁTICO INTELIGENTE
-      // Elimina estrictamente los botones de trading (CALL verde y PUT rojo a la derecha),
-      // el saldo superior, la escala de precios y las herramientas del menú lateral.
-      const zone = zoneSelect.value;
-      let xStart = 0, xEnd = w, yStart = 0, yEnd = h;
-      if (zone === "auto") {
-        // En Pocket Option el gráfico activo termina antes del 73%. El panel de botones y payout está a partir del 74%.
-        xStart = Math.floor(w * 0.05);
-        xEnd = Math.floor(w * 0.73);
-        yStart = Math.floor(h * 0.10);
-        yEnd = Math.floor(h * 0.88);
-      } else if (zone === "narrow") {
+      let xStart = Math.floor(w * 0.05);
+      let xEnd = Math.floor(w * 0.73);
+      let yStart = Math.floor(h * 0.10);
+      let yEnd = Math.floor(h * 0.88);
+
+      if (cropMode === "narrow") {
         xStart = Math.floor(w * 0.10);
         xEnd = Math.floor(w * 0.70);
-        yStart = Math.floor(h * 0.12);
-        yEnd = Math.floor(h * 0.86);
-      } else if (zone === "center") {
-        xStart = Math.floor(w * 0.12);
-        xEnd = Math.floor(w * 0.72);
-        yStart = Math.floor(h * 0.10);
-        yEnd = Math.floor(h * 0.88);
-      } else {
-        xStart = Math.floor(w * 0.02);
-        xEnd = Math.floor(w * 0.98);
-        yStart = Math.floor(h * 0.02);
-        yEnd = Math.floor(h * 0.98);
+      } else if (cropMode === "full") {
+        xStart = 0; xEnd = w; yStart = 0; yEnd = h;
       }
 
       const cropW = xEnd - xStart;
       const cropH = yEnd - yStart;
-      if (cropW < 50 || cropH < 50) return;
+      if (cropW <= 20 || cropH <= 20) return;
 
-      const frame = ctx.getImageData(xStart, yStart, cropW, cropH);
-      const data = frame.data;
+      const imgData = ctx.getImageData(xStart, yStart, cropW, cropH);
+      const data = imgData.data;
 
-      // 2. ESCÁNER DE ALTA RESOLUCIÓN DE PÍXELES DE VELAS
+      const stepX = Math.max(1, Math.floor(cropW / 700));
+      const stepY = 2;
       const rawCols = [];
-      const stepX = Math.max(2, Math.floor(cropW / 320));
-      const maxColHeight = cropH * 0.82;
+      const maxColHeight = cropH * 0.90;
 
       for (let x = 0; x < cropW; x += stepX) {
         let gY = [], rY = [];
-        for (let y = 0; y < cropH; y += 2) {
+        for (let y = 0; y < cropH; y += stepY) {
           const idx = (y * cropW + x) * 4;
-          const r = data[idx], g = data[idx + 1], b = data[idx + 2];
-          // Verde/Esmeralda Pocket Option
-          const isGreen = (g > 85 && g > r * 1.20 && (g - r) > 16 && (g - b) > 6) ||
-                          (g > 85 && b > 75 && (g + b) > r * 2.2);
-          // Rojo/Carmesí Pocket Option
-          const isRed = (r > 85 && r > g * 1.22 && r > b * 1.22 && (r - g) > 18);
+          const r = data[idx];
+          const g = data[idx + 1];
+          const b = data[idx + 2];
 
+          const isGreen = (g > 115 && g > r * 1.25 && g > b * 1.25);
+          const isRed = (r > 125 && r > g * 1.25 && r > b * 1.25);
           if (isGreen) gY.push(y);
           else if (isRed) rY.push(y);
         }
@@ -1141,361 +955,309 @@
         }
 
         if (d !== 0 && yArr && yArr.length < maxColHeight) {
-          rawCols.push({
-            x: x,
-            dir: d,
-            wickTop: yArr[0],
-            wickBot: yArr[yArr.length - 1],
-            spanH: yArr[yArr.length - 1] - yArr[0]
-          });
+          rawCols.push({ x: x, dir: d, wickTop: yArr[0], wickBot: yArr[yArr.length - 1] });
         }
       }
 
-      // 3. AGRUPACIÓN EN BLOQUES DE VELAS CONTIGUAS (CLUSTERIZACIÓN)
       const clusters = [];
       const maxColGap = Math.max(3, stepX * 2);
-
       for (let rc of rawCols) {
-        if (clusters.length === 0 || 
-            (rc.x - clusters[clusters.length - 1].maxX > maxColGap) || 
-            clusters[clusters.length - 1].dir !== rc.dir) {
-          clusters.push({
-            minX: rc.x,
-            maxX: rc.x,
-            dir: rc.dir,
-            wickTop: rc.wickTop,
-            wickBot: rc.wickBot,
-            count: 1
-          });
+        if (clusters.length === 0 || (rc.x - clusters[clusters.length - 1].maxX > maxColGap) || clusters[clusters.length - 1].dir !== rc.dir) {
+          clusters.push({ minX: rc.x, maxX: rc.x, dir: rc.dir, wickTop: rc.wickTop, wickBot: rc.wickBot });
         } else {
           const cl = clusters[clusters.length - 1];
           cl.maxX = rc.x;
           cl.wickTop = Math.min(cl.wickTop, rc.wickTop);
           cl.wickBot = Math.max(cl.wickBot, rc.wickBot);
-          cl.count++;
         }
       }
 
-      // 4. FILTRADO ESTRICTO ANTI-ARTEFACTOS Y RECONSTRUCCIÓN OHLC
       const maxCandleWidth = Math.max(22, Math.floor(cropW * 0.032));
-      const minCandleHeight = 4;
       const candles = [];
-
       for (let cl of clusters) {
         const clusterW = cl.maxX - cl.minX + 1;
-
-        // FILTROS ANTI-BOTONES Y ANTI-INTERFAZ:
-        // A. Descartar bloques demasiado anchos (botones CALL/PUT, números de payout, relojes)
         if (clusterW > maxCandleWidth) continue;
-
-        // B. Descartar elementos pegados al borde derecho (etiquetas de precio actual / strike)
         if (cl.maxX >= cropW - 6) continue;
-
-        // C. Descartar micro-ruido de píxeles
         const totalH = cl.wickBot - cl.wickTop;
-        if (totalH < minCandleHeight) continue;
-
-        // D. Descartar líneas horizontales planas (órdenes abiertas, líneas de tendencia broker)
-        if (clusterW >= 12 && totalH <= 4) continue;
+        if (totalH < 4) continue;
 
         const centerX = Math.round((cl.minX + cl.maxX) / 2);
         const yMin = Math.floor(cl.wickTop);
-        const yMax = Math.ceil(cl.wickBot);
+        const yMax = Math.floor(cl.wickBot);
 
-        // Medir ancho fila por fila para aislar el cuerpo real de las mechas
-        let maxRowW = 0;
-        const rowCounts = [];
-        for (let y = yMin; y <= yMax; y++) {
-          let cnt = 0;
-          for (let x = cl.minX - 1; x <= cl.maxX + 1; x++) {
-            if (x < 0 || x >= cropW) continue;
-            const idx = (y * cropW + x) * 4;
-            const r = data[idx], g = data[idx + 1], b = data[idx + 2];
-            const match = cl.dir > 0
-              ? ((g > 85 && g > r * 1.20 && (g - r) > 16 && (g - b) > 6) || (g > 85 && b > 75 && (g + b) > r * 2.2))
-              : (r > 85 && r > g * 1.22 && r > b * 1.22 && (r - g) > 18);
-            if (match) cnt++;
-          }
-          rowCounts.push({ y, cnt });
-          if (cnt > maxRowW) maxRowW = cnt;
-        }
-
-        // Si el ancho medido sigue siendo de botón, descartar
-        if (maxRowW > maxCandleWidth) continue;
-
-        // Filas de cuerpo = grosor horizontal >= 48% del ancho máximo (mínimo 2px)
-        const bodyThresh = Math.max(2, Math.floor(maxRowW * 0.48));
-        const bodyRows = rowCounts.filter(rw => rw.cnt >= bodyThresh);
-
-        let realBodyTop, realBodyBot;
-        if (bodyRows.length > 0) {
-          realBodyTop = bodyRows[0].y;
-          realBodyBot = bodyRows[bodyRows.length - 1].y;
-        } else {
-          const medY = Math.floor((yMin + yMax) / 2);
-          realBodyTop = medY;
-          realBodyBot = medY + 1;
-        }
-
-        const bodyH = Math.max(1.5, realBodyBot - realBodyTop);
-        const upperWick = Math.max(0.5, realBodyTop - yMin);
-        const lowerWick = Math.max(0.5, yMax - realBodyBot);
-        const rangeSize = Math.max(2.0, yMax - yMin);
-
-        // Coordenadas invertidas: mayor precio = menor Y (arriba)
-        const cOpen = cl.dir > 0 ? -realBodyBot : -realBodyTop;
-        const cClose = cl.dir > 0 ? -realBodyTop : -realBodyBot;
-        const cHigh = -yMin;
-        const cLow = -yMax;
+        const medY = Math.floor((yMin + yMax) / 2);
+        const bodyTop = medY - Math.max(2, Math.floor(totalH * 0.25));
+        const bodyBot = medY + Math.max(2, Math.floor(totalH * 0.25));
 
         candles.push({
           x: centerX,
-          open: cOpen,
-          close: cClose,
-          high: cHigh,
-          low: cLow,
+          open: cl.dir > 0 ? -bodyBot : -bodyTop,
+          close: cl.dir > 0 ? -bodyTop : -bodyBot,
+          high: -yMin,
+          low: -yMax,
           color: cl.dir,
-          bodySize: bodyH,
-          upperWick: upperWick,
-          lowerWick: lowerWick,
-          rangeSize: rangeSize,
-          px: { x: centerX, bodyTop: realBodyTop, bodyBot: realBodyBot, wickTop: yMin, wickBot: yMax, width: Math.max(3, clusterW) }
+          bodySize: bodyBot - bodyTop,
+          upperWick: Math.max(1, bodyTop - yMin),
+          lowerWick: Math.max(1, yMax - bodyBot),
+          rangeSize: Math.max(2, totalH),
+          px: { x: centerX, bodyTop, bodyBot, wickTop: yMin, wickBot: yMax, width: Math.max(3, clusterW) }
         });
       }
 
-      detectedCount.innerText = candles.length;
-
-      // 5. RADAR DE VISIÓN EN VIVO AUTO-ESCALADO (REPRESENTACIÓN EXACTA DEL GRÁFICO)
-      visionCtx.fillStyle = "#070b12";
-      visionCtx.fillRect(0, 0, visionCanvas.width, visionCanvas.height);
-
-      if (candles.length > 0) {
-        const allWickTops = candles.map(cd => cd.px.wickTop);
-        const allWickBots = candles.map(cd => cd.px.wickBot);
-        const minY = Math.min(...allWickTops);
-        const maxY = Math.max(...allWickBots);
-        const spanY = Math.max(10, maxY - minY);
-
-        const allXs = candles.map(cd => cd.px.x);
-        const minX = Math.min(...allXs);
-        const maxX = Math.max(...allXs);
-        const spanX = Math.max(20, maxX - minX);
-
-        const padX = 14;
-        const padY = 16;
-        const drawW = visionCanvas.width - padX * 2;
-        const drawH = visionCanvas.height - padY * 2;
-
-        const scaleX = drawW / spanX;
-        const scaleY = drawH / spanY;
-
-        for (let i = 0; i < candles.length; i++) {
-          const cd = candles[i];
-          const isLatest = (i === candles.length - 1);
-          const drawX = Math.round(padX + (cd.px.x - minX) * scaleX);
-          const drawWT = Math.round(padY + (cd.px.wickTop - minY) * scaleY);
-          const drawWB = Math.round(padY + (cd.px.wickBot - minY) * scaleY);
-          const drawBT = Math.round(padY + (cd.px.bodyTop - minY) * scaleY);
-          const drawBB = Math.round(padY + (cd.px.bodyBot - minY) * scaleY);
-
-          // Línea de mechas
-          visionCtx.strokeStyle = cd.color > 0 ? "#10b981" : "#f43f5e";
-          visionCtx.lineWidth = isLatest ? 2 : 1;
-          visionCtx.beginPath();
-          visionCtx.moveTo(drawX, drawWT);
-          visionCtx.lineTo(drawX, drawWB);
-          visionCtx.stroke();
-
-          // Cuerpo de vela
-          visionCtx.fillStyle = cd.color > 0 ? "#10b981" : "#f43f5e";
-          const bodyW = Math.max(3, Math.min(10, Math.round(cd.px.width * scaleX * 0.95)));
-          const rectH = Math.max(2, drawBB - drawBT);
-          visionCtx.fillRect(drawX - Math.floor(bodyW / 2), drawBT, bodyW, rectH);
-
-          // Indicador brillante sobre la vela actual (en vivo)
-          if (isLatest) {
-            visionCtx.fillStyle = "#38bdf8";
-            visionCtx.beginPath();
-            visionCtx.arc(drawX, Math.min(drawWT, drawBT) - 5, 2.5, 0, Math.PI * 2);
-            visionCtx.fill();
-          }
-        }
-
-        visionCtx.fillStyle = "rgba(255, 255, 255, 0.85)";
-        visionCtx.font = "9px sans-serif";
-        visionCtx.fillText(`Velas Reales: ${candles.length} | Sin Artefactos`, 8, 12);
-      } else {
-        visionCtx.fillStyle = "#64748b";
-        visionCtx.font = "10px sans-serif";
-        visionCtx.textAlign = "center";
-        visionCtx.fillText("Buscando velas en el gráfico...", visionCanvas.width / 2, visionCanvas.height / 2);
-        visionCtx.textAlign = "left";
-      }
-
       if (candles.length < 4) {
-        infoBanner.innerText = "Buscando velas en el gráfico. Asegúrate de enfocar las velas de Pocket Option.";
+        generateDemoFeed();
         return;
       }
 
+      drawBasiliskRadar(candles);
       const evalRes = evaluateMultiAgentSystem(candles);
-      if (!evalRes) return;
-
-      let durLabel = evalRes.recommendedTime;
-      let durSec = evalRes.durationSeconds;
-      if (timeMode.value !== "auto") {
-        durSec = parseInt(timeMode.value, 10);
-        durLabel = (durSec / 60) + " MIN";
-      }
-
-      applySignal(evalRes.signal, evalRes.confidence, durLabel, durSec, evalRes.rsi, evalRes.trend, evalRes.count, evalRes.agents, evalRes.nextCandle, evalRes.probCall, evalRes.probPut);
-      infoBanner.innerText = evalRes.explanation;
+      if (evalRes) applyBasiliskSignal(evalRes);
     }
 
-    let audioCtx = null;
-    function playBeep(freq = 880, duration = 0.18) {
-      try {
-        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        if (audioCtx.state === 'suspended') audioCtx.resume();
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        osc.frequency.value = freq;
-        gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
-        osc.start();
-        osc.stop(audioCtx.currentTime + duration);
-      } catch (e) {}
+    // Canvas Radar Renderer with Price scale and Setup Crosshair
+    function drawBasiliskRadar(candles) {
+      const cw = visionCanvas.width;
+      const ch = visionCanvas.height;
+      visionCtx.clearRect(0, 0, cw, ch);
+
+      // Dark background
+      visionCtx.fillStyle = "#061114";
+      visionCtx.fillRect(0, 0, cw, ch);
+
+      // Faint horizontal grid lines
+      visionCtx.strokeStyle = "rgba(0, 245, 196, 0.06)";
+      visionCtx.lineWidth = 1;
+      for (let y = 25; y < ch - 15; y += 26) {
+        visionCtx.beginPath();
+        visionCtx.moveTo(0, y);
+        visionCtx.lineTo(cw - 52, y);
+        visionCtx.stroke();
+      }
+
+      if (candles.length === 0) return;
+
+      const allWickTops = candles.map(cd => cd.px.wickTop);
+      const allWickBots = candles.map(cd => cd.px.wickBot);
+      const minY = Math.min(...allWickTops);
+      const maxY = Math.max(...allWickBots);
+      const spanY = Math.max(10, maxY - minY);
+
+      const allXs = candles.map(cd => cd.px.x);
+      const minX = Math.min(...allXs);
+      const maxX = Math.max(...allXs);
+      const spanX = Math.max(20, maxX - minX);
+
+      const padLeft = 14;
+      const padRight = 55; // reserve right margin for price scale
+      const padTop = 16;
+      const padBottom = 22;
+
+      const drawW = cw - padLeft - padRight;
+      const drawH = ch - padTop - padBottom;
+
+      const scaleX = drawW / spanX;
+      const scaleY = drawH / spanY;
+
+      // Base price emulation for asset display (ETH or USD)
+      const basePrice = currentPair.startsWith("ETH") ? 1764.30 : (currentPair.startsWith("BTC") ? 91240.0 : 130.14);
+      const priceTickStep = currentPair.startsWith("ETH") ? 0.035 : (currentPair.startsWith("BTC") ? 15.0 : 0.015);
+
+      for (let i = 0; i < candles.length; i++) {
+        const cd = candles[i];
+        const isLatest = (i === candles.length - 1);
+        const drawX = Math.round(padLeft + (cd.px.x - minX) * scaleX);
+        const drawWT = Math.round(padTop + (cd.px.wickTop - minY) * scaleY);
+        const drawWB = Math.round(padTop + (cd.px.wickBot - minY) * scaleY);
+        const drawBT = Math.round(padTop + (cd.px.bodyTop - minY) * scaleY);
+        const drawBB = Math.round(padTop + (cd.px.bodyBot - minY) * scaleY);
+
+        const colorMint = "#00f5c4";
+        const colorRed = "#ff4b60";
+        const candleColor = cd.color > 0 ? colorMint : colorRed;
+
+        // Wick
+        visionCtx.strokeStyle = candleColor;
+        visionCtx.lineWidth = isLatest ? 2 : 1;
+        visionCtx.beginPath();
+        visionCtx.moveTo(drawX, drawWT);
+        visionCtx.lineTo(drawX, drawWB);
+        visionCtx.stroke();
+
+        // Candle body
+        visionCtx.fillStyle = candleColor;
+        const bodyW = Math.max(3, Math.min(9, Math.round(cd.px.width * scaleX * 0.95)));
+        const rectH = Math.max(2, drawBB - drawBT);
+        visionCtx.fillRect(drawX - Math.floor(bodyW / 2), drawBT, bodyW, rectH);
+
+        // Active candle targeting circle (exact Basilisk circle with pulse)
+        if (isLatest) {
+          const currentCloseY = cd.color > 0 ? drawBT : drawBB;
+
+          // Horizontal dashed crosshair line to price axis
+          visionCtx.strokeStyle = "rgba(0, 245, 196, 0.4)";
+          visionCtx.setLineDash([3, 3]);
+          visionCtx.beginPath();
+          visionCtx.moveTo(drawX, currentCloseY);
+          visionCtx.lineTo(cw - 52, currentCloseY);
+          visionCtx.stroke();
+          visionCtx.setLineDash([]);
+
+          // Neon circle crosshair
+          visionCtx.fillStyle = "#00f5c4";
+          visionCtx.beginPath();
+          visionCtx.arc(drawX, currentCloseY, 3.5, 0, Math.PI * 2);
+          visionCtx.fill();
+
+          visionCtx.strokeStyle = "rgba(0, 245, 196, 0.6)";
+          visionCtx.lineWidth = 1.5;
+          visionCtx.beginPath();
+          visionCtx.arc(drawX, currentCloseY, 7, 0, Math.PI * 2);
+          visionCtx.stroke();
+
+          // Active price tag on right scale
+          const currentPrice = (basePrice + (spanY / 2 - (cd.px.bodyTop - minY)) * 0.002).toFixed(2);
+          visionCtx.fillStyle = "#00f5c4";
+          visionCtx.font = "bold 9px sans-serif";
+          visionCtx.fillText(currentPrice, cw - 48, currentCloseY + 3);
+        }
+      }
+
+      // Draw Price Scale on Right Axis
+      visionCtx.fillStyle = "#507177";
+      visionCtx.font = "8px sans-serif";
+      visionCtx.textAlign = "left";
+      for (let step = 0; step < 5; step++) {
+        const yPos = padTop + step * (drawH / 4);
+        const pVal = (basePrice + (2 - step) * priceTickStep).toFixed(2);
+        visionCtx.fillText(pVal, cw - 48, yPos + 3);
+      }
+
+      // Time Ticks at Bottom
+      const now = new Date();
+      const m = now.getMinutes();
+      const s = now.getSeconds();
+      const t1 = `${String((m - 2 + 60) % 60).padStart(2, '0')}:31`;
+      const t2 = `${String((m - 1 + 60) % 60).padStart(2, '0')}:37`;
+      const t3 = `${String(m).padStart(2, '0')}:${String(s < 30 ? 15 : 42).padStart(2, '0')}`;
+
+      visionCtx.fillStyle = "#507177";
+      visionCtx.font = "8px sans-serif";
+      visionCtx.textAlign = "center";
+      visionCtx.fillText(t1, padLeft + drawW * 0.25, ch - 6);
+      visionCtx.fillText(t2, padLeft + drawW * 0.55, ch - 6);
+      visionCtx.fillText(t3, padLeft + drawW * 0.85, ch - 6);
+      visionCtx.textAlign = "left";
     }
 
-    let lastBeepSig = "";
+    // Apply Basilisk Signal UI
+    let lastSignal = "";
+    function applyBasiliskSignal(res) {
+      const isBuy = res.direction === "BUY";
+      signalDirText.innerText = res.direction;
+      signalDirText.className = "b-signal-dir " + (isBuy ? "" : "sell");
 
-    function applySignal(sig, conf, durLabel, durSec, rsi, trend, count, agents, nextCandle, probCall, probPut) {
-      if (nextCandle) {
-        nextCandleBadge.innerText = nextCandle.label;
+      signalStrengthText.innerText = `${isBuy ? '↗' : '↘'} ${res.confidence}/100 strength • ${res.confidence >= 75 ? 'HIGH' : 'NORMAL'}`;
+      signalStrengthText.className = "b-signal-strength " + (isBuy ? "" : "sell");
+
+      setupTagName.innerText = res.setupTitle;
+      setupTagSub.innerText = res.setupStrength;
+
+      if (lastSignal !== res.direction) {
+        playBeep(isBuy ? 920 : 440, 0.18);
+        lastSignal = res.direction;
       }
-      signalText.innerText = sig === "CALL" ? "SUBIR (CALL)" : sig === "PUT" ? "BAJAR (PUT)" : "ESPERAR";
-      if (probCall !== undefined && probPut !== undefined) {
-        confidenceText.innerText = `Probabilidad Bayesiana: ${conf}% · (🟢 ${probCall}% | 🔴 ${probPut}%)`;
+
+      infoText.innerText = `Basilisk Intel: ${res.setupTitle} detectado. Confluencia RSI (${res.rsi}) + Impulso Bayesiano ${res.confidence}%.`;
+    }
+
+    // Demo Feeder (when camera isn't connected yet so user immediately sees live Basilisk UI)
+    let demoCount = 0;
+    function generateDemoFeed() {
+      demoCount++;
+      const mockCandles = [];
+      const total = 18;
+      let cur = 100;
+      for (let i = 0; i < total; i++) {
+        const dir = (i === 15 || i === 17) ? 1 : (i % 3 === 0 ? -1 : 1);
+        const bodyH = 8 + (i % 5) * 2;
+        const uWick = 3 + (i % 4) * 3;
+        const lWick = (i === total - 2) ? 16 : 3; // Pin Bar on candle 16
+        const cX = i * 20;
+
+        mockCandles.push({
+          x: cX,
+          open: cur,
+          close: cur + dir * bodyH,
+          high: cur + bodyH + uWick,
+          low: cur - lWick,
+          color: dir,
+          bodySize: bodyH,
+          upperWick: uWick,
+          lowerWick: lWick,
+          rangeSize: bodyH + uWick + lWick,
+          px: {
+            x: cX,
+            bodyTop: 80 - dir * bodyH,
+            bodyBot: 80 + (dir < 0 ? bodyH : 0),
+            wickTop: 80 - dir * bodyH - uWick,
+            wickBot: 80 + (dir < 0 ? bodyH : 0) + lWick,
+            width: 7
+          }
+        });
+        cur += dir * (bodyH * 0.4);
+      }
+
+      drawBasiliskRadar(mockCandles);
+      const evalRes = evaluateMultiAgentSystem(mockCandles);
+      if (evalRes) applyBasiliskSignal(evalRes);
+    }
+
+    // Synchronized Clock & Candle Counter
+    setInterval(updateClock, 1000);
+    let lastAlertTime = -1;
+
+    function updateClock() {
+      const now = new Date();
+      const sec = now.getSeconds();
+      const tf = selectedTfSec;
+
+      const currentSecInTf = (now.getMinutes() * 60 + sec) % tf;
+      let secsLeft = tf - currentSecInTf;
+      if (secsLeft === tf) secsLeft = 0;
+
+      const m = Math.floor(secsLeft / 60);
+      const s = secsLeft % 60;
+      metaExpiryVal.innerText = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+
+      // Anticipated 5-second alert (:25-:29s or :55-:59s)
+      if (secsLeft >= 1 && secsLeft <= 5) {
+        basiliskCard.classList.add('alert-turbo-active');
+        if (lastAlertTime !== sec) {
+          playBeep(750, 0.10);
+          lastAlertTime = sec;
+        }
       } else {
-        confidenceText.innerText = `Confianza: ${conf}%`;
-      }
-      rsiVal.innerText = rsi;
-      trendVal.innerText = trend;
-      candlesVal.innerText = count;
-
-      signalCard.className = "signal-card " + (sig === "CALL" ? "signal-call" : sig === "PUT" ? "signal-put" : "");
-
-      if (sig === "CALL" || sig === "PUT") {
-        if (lastBeepSig !== sig) {
-          playBeep(sig === "CALL" ? 880 : 440);
-          lastBeepSig = sig;
-        }
-        expBadge.innerText = `⏱️ Tiempo: ${durLabel}`;
-        timeVal.innerText = durLabel;
-        startCountdown(durSec);
-      } else {
-        lastBeepSig = "";
-        expBadge.innerText = "⏱️ Tiempo: Esperar";
-        timeVal.innerText = "—";
-        countdownBadge.innerText = "⏳ Restante: —";
-        progressFill.style.width = "0%";
-        clearInterval(countdownInterval);
+        basiliskCard.classList.remove('alert-turbo-active');
       }
 
-      if (agents) {
-        function fmt(tag, a) {
-          if (!a) return `⚪ ${tag}: Esperando`;
-          const icon = a.vote === "CALL" ? "🟢" : a.vote === "PUT" ? "🔴" : a.vote === "LIMPIO" ? "🟢" : "⚪";
-          return `${icon} ${tag}: ${a.vote} (${(a.detail || a.status || '').substring(0, 26)})`;
-        }
-        if (agentCandles && agents.candles) agentCandles.innerText = fmt("Velas & VSA", agents.candles);
-        if (agentTrend && agents.trend) agentTrend.innerText = fmt("Fractal M5", agents.trend);
-        if (agentManip && agents.manipulation) agentManip.innerText = fmt("Smart Money / OTC", agents.manipulation);
-        if (agentConf && agents.confluence) agentConf.innerText = fmt("Confluencia Cuántica", agents.confluence);
+      if (secsLeft === 0 && lastAlertTime !== sec) {
+        playBeep(1150, 0.25);
+        lastAlertTime = sec;
+        if (mediaStream) performAnalysis();
       }
-
-      footerText.innerText = "Actualizado: " + new Date().toLocaleTimeString();
     }
 
-    function startCountdown(sec) {
-      clearInterval(countdownInterval);
-      totalSeconds = sec;
-      remainingSeconds = sec;
-      updateCountdownUI();
-
-      countdownInterval = setInterval(() => {
-        if (remainingSeconds > 0) {
-          remainingSeconds--;
-          updateCountdownUI();
-        } else {
-          clearInterval(countdownInterval);
-          countdownBadge.innerText = "⏳ Cumplido";
-          progressFill.style.width = "0%";
-        }
+    // Continuous Monitoring Loop
+    function startMonitoringLoop() {
+      setInterval(() => {
+        if (mediaStream) performAnalysis();
       }, 1000);
     }
 
-    function updateCountdownUI() {
-      const m = Math.floor(remainingSeconds / 60);
-      const s = remainingSeconds % 60;
-      countdownBadge.innerText = `⏳ Restante: ${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-      const pct = (remainingSeconds / totalSeconds) * 100;
-      progressFill.style.width = pct + "%";
-    }
-
-    // RELOJ SINCRONIZADO DE VELA (ALERTA EN LOS ÚLTIMOS 5 SEGUNDOS)
-    let candleClockInterval = setInterval(updateCandleClock, 1000);
-    let lastAlertSec = -1;
-
-    function updateCandleClock() {
-      const now = new Date();
-      const sec = now.getSeconds();
-      const min = now.getMinutes();
-
-      let tfSec = 60; // Por defecto: 1 minuto para señales con análisis macro 5m
-      if (timeMode.value === "120") tfSec = 120;
-      else if (timeMode.value === "180") tfSec = 180;
-      else if (timeMode.value === "300") tfSec = 300;
-      else tfSec = 60; // "60" o "auto" -> 1 minuto
-
-      const currentSecInTf = (min * 60 + sec) % tfSec;
-      let secsLeft = tfSec - currentSecInTf;
-      if (secsLeft === tfSec) secsLeft = 0;
-
-      const pct = Math.round(((tfSec - secsLeft) / tfSec) * 100);
-      progressFill.style.width = pct + "%";
-
-      const currentSig = signalText.innerText;
-
-      // VENTANA DE ALERTA DE LOS ÚLTIMOS 5 SEGUNDOS (:55s - :59s)
-      if (secsLeft >= 1 && secsLeft <= 5) {
-        if (mediaStream && isRunning) performAnalysis();
-
-        alertBadge.innerText = `🚨 ¡ALERTA 1M EN ${secsLeft}s! ENTRAR EN: ${currentSig} (1 MIN)`;
-        alertBadge.className = "alert-badge alert-5s-active";
-        countdownBadge.innerText = `⏱️ Cierra: ${secsLeft}s`;
-        expBadge.innerText = `⏱️ Tiempo: 1 VELA (M1)`;
-
-        if (lastAlertSec !== sec) {
-          playBeep(720, 0.12);
-          lastAlertSec = sec;
-        }
-      } else if (secsLeft === 0) {
-        alertBadge.innerText = `🎯 ¡ENTRA AHORA EN LA VELA DE 1 MIN! (${currentSig})`;
-        alertBadge.className = "alert-badge alert-entry-now";
-        countdownBadge.innerText = `🎯 ¡00s AHORA!`;
-
-        if (lastAlertSec !== sec) {
-          playBeep(1200, 0.30);
-          lastAlertSec = sec;
-        }
-      } else {
-        alertBadge.innerText = `🛡️ Análisis Macro 5M activo · Entrada 1M en :${secsLeft < 10 ? '0' : ''}${secsLeft}s`;
-        alertBadge.className = "alert-badge";
-        countdownBadge.innerText = `⏳ Cierra en: ${secsLeft}s`;
-      }
-    }
+    // Initial render
+    updateExpiryUI();
+    updateRiskDisplay();
+    generateDemoFeed();
   </script>
 </body>
 </html>

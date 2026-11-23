@@ -14,7 +14,7 @@ except ImportError:
 class MiniBot(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Pocket Mini Bot")
+        self.setWindowTitle("Basilisk — AI Visual Trading Assistant")
         self.setFixedSize(340, 590)
         self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
         self.region = None
@@ -43,12 +43,12 @@ class MiniBot(QWidget):
         root.setContentsMargins(14, 14, 14, 14)
         root.setSpacing(10)
 
-        # Header: Title + Status Pill
+        # Header: Title + Status Pill (Basilisk Style)
         header = QHBoxLayout()
         header.setSpacing(6)
-        title = QLabel("POCKET BOT")
+        title = QLabel("🐉 Basilisk")
         title.setObjectName("title")
-        self.status = QLabel("Listo")
+        self.status = QLabel("🟢 LIVE")
         self.status.setObjectName("status")
         header.addWidget(title)
         header.addStretch()
@@ -115,7 +115,7 @@ class MiniBot(QWidget):
         # 4 Metric Tiles (RSI, Tendencia, Tiempo, Velas)
         metrics_layout = QHBoxLayout()
         metrics_layout.setSpacing(6)
-        rsi_tile, self.rsi_title, self.rsi_val = self.create_tile("RSI", "—")
+        rsi_tile, self.rsi_title, self.rsi_val = self.create_tile("RSI (20)", "—")
         trend_tile, self.trend_title, self.trend_val = self.create_tile("TENDENCIA", "—")
         time_tile, self.time_title, self.time_val = self.create_tile("TIEMPO", "—")
         candles_tile, self.candles_title, self.candles_val = self.create_tile("VELAS", "—")
@@ -161,7 +161,8 @@ class MiniBot(QWidget):
         self.time_mode = QComboBox()
         self.time_mode.setObjectName("comboInput")
         self.time_mode.addItems([
-            "🎯 MTF: Análisis 5m + Señal 1m (Recomendado)",
+            "⚡ Turbo 30s (Pocket Option 00:00:30)",
+            "🎯 MTF: Macro 5m + Señal 1m",
             "⏱️ Fijar a 1 min (M1)",
             "⏱️ Fijar a 2 min (M2)",
             "⏱️ Fijar a 3 min (M3)",
@@ -230,34 +231,34 @@ class MiniBot(QWidget):
     def apply_styles(self):
         self.setStyleSheet("""
             QWidget {
-                background-color: #0e131b;
+                background-color: #081619;
                 color: #e2e8f0;
                 font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             }
             QLabel#title {
-                font-size: 13px;
-                font-weight: 800;
-                letter-spacing: 0.8px;
-                color: #94a3b8;
+                font-size: 15px;
+                font-weight: 900;
+                letter-spacing: 0.5px;
+                color: #00f5c4;
             }
             QLabel#status {
-                background: #1e293b;
-                color: #94a3b8;
-                border: 1px solid #334155;
+                background: rgba(0, 245, 196, 0.12);
+                color: #00f5c4;
+                border: 1px solid rgba(0, 245, 196, 0.4);
                 border-radius: 9px;
                 padding: 3px 9px;
                 font-size: 11px;
-                font-weight: 600;
+                font-weight: 700;
             }
             QFrame#signalCard {
-                background: #161f2e;
-                border: 1px solid #253347;
-                border-radius: 12px;
+                background: #0c2024;
+                border: 1px solid rgba(0, 245, 196, 0.22);
+                border-radius: 14px;
             }
             QLabel#nextCandleBadge {
-                background: #0f172a;
-                color: #38bdf8;
-                border: 1px solid #1e293b;
+                background: #061114;
+                color: #00f5c4;
+                border: 1px solid rgba(0, 245, 196, 0.35);
                 border-radius: 8px;
                 padding: 4px 8px;
                 font-size: 11px;
@@ -265,20 +266,20 @@ class MiniBot(QWidget):
                 letter-spacing: 0.5px;
             }
             QLabel#signalText {
-                font-size: 30px;
-                font-weight: 800;
-                letter-spacing: 1.2px;
-                color: #94a3b8;
+                font-size: 32px;
+                font-weight: 900;
+                letter-spacing: 1px;
+                color: #00f5c4;
             }
             QLabel#confidenceText {
                 font-size: 12px;
-                font-weight: 500;
-                color: #64748b;
+                font-weight: 700;
+                color: #7ea2a8;
             }
             QLabel#expBadge, QLabel#countdownBadge {
-                background: #0f172a;
+                background: #061114;
                 color: #cbd5e1;
-                border: 1px solid #1e293b;
+                border: 1px solid rgba(0, 245, 196, 0.2);
                 border-radius: 6px;
                 padding: 4px 8px;
                 font-size: 11px;
@@ -338,24 +339,25 @@ class MiniBot(QWidget):
                 font-weight: 600;
             }
             QPushButton#primaryBtn {
-                background: #2563eb;
-                color: #ffffff;
-                border: 1px solid #3b82f6;
+                background: #00f5c4;
+                color: #041918;
+                border: none;
+                font-weight: 800;
             }
             QPushButton#primaryBtn:hover {
-                background: #1d4ed8;
+                background: #25f8ce;
             }
             QPushButton#primaryBtn:pressed {
-                background: #1e40af;
+                background: #00cca4;
             }
             QPushButton#secondaryBtn {
-                background: #1e293b;
-                color: #cbd5e1;
-                border: 1px solid #334155;
+                background: #0e272b;
+                color: #00f5c4;
+                border: 1px solid rgba(0, 245, 196, 0.3);
             }
             QPushButton#secondaryBtn:hover {
-                background: #334155;
-                color: #f8fafc;
+                background: #153c42;
+                color: #ffffff;
             }
             QPushButton#subtleBtn {
                 background: transparent;
@@ -405,63 +407,63 @@ class MiniBot(QWidget):
         if signal_type == "CALL":
             self.signal_card.setStyleSheet("""
                 QFrame#signalCard {
-                    background: #064e3b;
-                    border: 1px solid #10b981;
+                    background: #092427;
+                    border: 1px solid #00f5c4;
                     border-radius: 12px;
                 }
                 QLabel#nextCandleBadge {
-                    background: #042f2e;
-                    color: #6ee7b7;
-                    border: 1px solid #10b981;
+                    background: #041416;
+                    color: #00f5c4;
+                    border: 1px solid #00f5c4;
                     border-radius: 8px;
                     padding: 4px 8px;
                     font-size: 11px;
                     font-weight: 800;
                 }
                 QLabel#signalText {
-                    color: #34d399;
+                    color: #00f5c4;
                 }
                 QLabel#confidenceText {
-                    color: #a7f3d0;
+                    color: #7ea2a8;
                 }
                 QLabel#expBadge, QLabel#countdownBadge {
-                    background: #042f2e;
-                    color: #6ee7b7;
-                    border: 1px solid #0d9488;
+                    background: #041416;
+                    color: #00f5c4;
+                    border: 1px solid rgba(0, 245, 196, 0.4);
                 }
             """)
-            self.progress_bar.setStyleSheet("QProgressBar#signalProgress::chunk { background-color: #10b981; }")
-            self.status.setStyleSheet("background:#064e3b; color:#34d399; border:1px solid #10b981; border-radius:9px; padding:3px 9px; font-size:11px; font-weight:600;")
+            self.progress_bar.setStyleSheet("QProgressBar#signalProgress::chunk { background-color: #00f5c4; }")
+            self.status.setStyleSheet("background:rgba(0, 245, 196, 0.15); color:#00f5c4; border:1px solid #00f5c4; border-radius:9px; padding:3px 9px; font-size:11px; font-weight:700;")
         elif signal_type == "PUT":
             self.signal_card.setStyleSheet("""
                 QFrame#signalCard {
-                    background: #4c0519;
-                    border: 1px solid #f43f5e;
+                    background: #2b0c13;
+                    border: 1px solid #ff4b60;
                     border-radius: 12px;
                 }
                 QLabel#nextCandleBadge {
-                    background: #2e0814;
-                    color: #fda4af;
-                    border: 1px solid #f43f5e;
+                    background: #190509;
+                    color: #ff4b60;
+                    border: 1px solid #ff4b60;
                     border-radius: 8px;
                     padding: 4px 8px;
                     font-size: 11px;
                     font-weight: 800;
                 }
                 QLabel#signalText {
-                    color: #fb7185;
+                    color: #ff4b60;
                 }
                 QLabel#confidenceText {
-                    color: #fecdd3;
+                    color: #fda4af;
                 }
                 QLabel#expBadge, QLabel#countdownBadge {
-                    background: #2e0814;
-                    color: #fda4af;
-                    border: 1px solid #e11d48;
+                    background: #190509;
+                    color: #ff4b60;
+                    border: 1px solid rgba(255, 75, 96, 0.4);
                 }
             """)
-            self.progress_bar.setStyleSheet("QProgressBar#signalProgress::chunk { background-color: #f43f5e; }")
-            self.status.setStyleSheet("background:#4c0519; color:#fb7185; border:1px solid #f43f5e; border-radius:9px; padding:3px 9px; font-size:11px; font-weight:600;")
+            self.progress_bar.setStyleSheet("QProgressBar#signalProgress::chunk { background-color: #ff4b60; }")
+            self.status.setStyleSheet("background:rgba(255, 75, 96, 0.15); color:#ff4b60; border:1px solid #ff4b60; border-radius:9px; padding:3px 9px; font-size:11px; font-weight:700;")
         else:
             self.signal_card.setStyleSheet("""
                 QFrame#signalCard {
@@ -539,18 +541,26 @@ class MiniBot(QWidget):
         min_val = now.minute
 
         mode_idx = self.time_mode.currentIndex()
-        if mode_idx == 2:   # 2 MIN (M2)
+        if mode_idx == 0:   # ⚡ Turbo 30s (Pocket Option 00:00:30)
+            tf_sec = 30
+            secs_left = 30 - (sec % 30)
+            lbl_dur = "30 SEG"
+        elif mode_idx == 3: # 2 MIN (M2)
             tf_sec = 120
             secs_left = 120 - ((min_val % 2) * 60 + sec)
-        elif mode_idx == 3: # 3 MIN (M3)
+            lbl_dur = "2 MIN"
+        elif mode_idx == 4: # 3 MIN (M3)
             tf_sec = 180
             secs_left = 180 - ((min_val % 3) * 60 + sec)
-        elif mode_idx == 4: # 5 MIN (M5)
+            lbl_dur = "3 MIN"
+        elif mode_idx == 5: # 5 MIN (M5)
             tf_sec = 300
             secs_left = 300 - ((min_val % 5) * 60 + sec)
-        else:               # 0 (MTF: Análisis 5m + Señal 1m) o 1 (Fijar 1m)
+            lbl_dur = "5 MIN"
+        else:               # 1 (MTF: Macro 5m + Señal 1m) o 2 (1m)
             tf_sec = 60
             secs_left = 60 - sec
+            lbl_dur = "1 MIN"
 
         if secs_left == tf_sec:
             secs_left = 0
@@ -558,20 +568,20 @@ class MiniBot(QWidget):
         pct = int(((tf_sec - secs_left) / tf_sec) * 100) if tf_sec > 0 else 0
         self.progress_bar.setValue(pct)
 
-        # VENTANA DE CONFIRMACIÓN Y ALERTA FINAL (ÚLTIMOS 5 SEGUNDOS: :55s - :59s)
+        # VENTANA DE CONFIRMACIÓN Y ALERTA FINAL (ÚLTIMOS 5 SEGUNDOS: :25s-:29s o :55s-:59s)
         if 1 <= secs_left <= 5:
             if self.region and self.timer.isActive():
                 self.analyze()
 
             sig = getattr(self, "_current_sig", "ESPERAR")
-            self.alert_badge.setText(f"🚨 ¡ALERTA 1M EN {secs_left}s! ENTRAR EN: {sig} (1 MIN)")
+            self.alert_badge.setText(f"🚨 ¡ALERTA EN {secs_left}s! ENTRAR EN: {sig} ({lbl_dur})")
             self.alert_badge.setStyleSheet("background: #dc2626; color: #ffffff; font-weight: 800; border-radius: 6px; padding: 4px; font-size: 11px;")
-            self.countdown_label.setText(f"⏱️ Fin vela: {secs_left}s")
+            self.countdown_label.setText(f"⏱️ Fin ciclo: {secs_left}s")
             self.countdown_label.setStyleSheet("background: #450a0a; color: #fca5a5; border: 1px solid #ef4444; border-radius: 6px; padding: 4px; font-size: 11px; font-weight: 800;")
             QApplication.beep()
         elif secs_left == 0:
             sig = getattr(self, "_current_sig", "ESPERAR")
-            self.alert_badge.setText(f"🎯 ¡ENTRA AHORA EN LA VELA DE 1 MIN! ({sig})")
+            self.alert_badge.setText(f"🎯 ¡ENTRA AHORA EN LA OPERACIÓN ({sig} · {lbl_dur})!")
             self.alert_badge.setStyleSheet("background: #059669; color: #ffffff; font-weight: 900; border-radius: 6px; padding: 4px; font-size: 11px;")
             self.countdown_label.setText("🎯 ¡00s AHORA!")
             self.countdown_label.setStyleSheet("background: #022c22; color: #6ee7b7; border: 1px solid #10b981; border-radius: 6px; padding: 4px; font-size: 11px; font-weight: 800;")
@@ -579,7 +589,7 @@ class MiniBot(QWidget):
         else:
             self.countdown_label.setText(f"⏳ Cierra en: {secs_left}s")
             self.countdown_label.setStyleSheet("background: #0f172a; color: #cbd5e1; border: 1px solid #1e293b; border-radius: 6px; padding: 4px 8px; font-size: 11px; font-weight: 600;")
-            self.alert_badge.setText(f"🛡️ Análisis 5M + Señal 1M · Cierre en :{secs_left:02d}s")
+            self.alert_badge.setText(f"🛡️ Modo {lbl_dur} · Cierre en :{secs_left:02d}s")
             self.alert_badge.setStyleSheet("background: #0f172a; color: #94a3b8; border: 1px solid #1e293b; border-radius: 6px; padding: 3px 6px; font-size: 10px; font-weight: 600;")
 
     def tick_countdown(self):
