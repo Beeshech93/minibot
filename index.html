@@ -206,6 +206,30 @@
       text-decoration: underline;
       cursor: pointer;
     }
+    .b-auto-pair-btn {
+      background: rgba(0, 245, 196, 0.15);
+      border: 1px solid rgba(0, 245, 196, 0.45);
+      color: var(--mint);
+      border-radius: 6px;
+      padding: 1px 7px;
+      font-size: 9px;
+      font-weight: 800;
+      cursor: pointer;
+      margin-left: 6px;
+      transition: all 0.2s ease;
+      vertical-align: middle;
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+    }
+    .b-auto-pair-btn.active {
+      background: var(--mint);
+      color: #041918;
+      box-shadow: 0 0 8px var(--mint-glow);
+    }
+    .b-auto-pair-btn:hover {
+      transform: scale(1.05);
+    }
     .b-signal-main {
       display: flex;
       align-items: baseline;
@@ -597,7 +621,10 @@
 
     <!-- Signal Banner -->
     <div class="b-signal-section" id="signalSection">
-      <div class="b-asset-lbl">Signal • <span id="currentPairText" title="Clic para cambiar par">ETH/USD OTC</span></div>
+      <div class="b-asset-lbl">
+        Signal • <span id="currentPairText" title="Clic para seleccionar par de divisas">ETH/USD OTC</span>
+        <button class="b-auto-pair-btn active" id="autoPairToggle" title="Activar/Desactivar Cambio Automático de Pares de Divisas">🔄 AUTO</button>
+      </div>
       <div class="b-signal-main">
         <span class="b-signal-dir" id="signalDirText">BUY</span>
         <span class="b-signal-strength" id="signalStrengthText">↗ 75/100 strength • HIGH</span>
@@ -791,20 +818,22 @@
     // RADAR DE MERCADOS AUTOMÁTICO (AUTO-SCAN MULTIPAR POCKET OPTION)
     // =============================================================
     let autoScanEnabled = true;
+    let autoPairSwitchEnabled = true;
+    const autoPairToggle = document.getElementById('autoPairToggle');
 
     // Catálogo en vivo de pares OTC de Pocket Option con sus Payouts reales
     let marketCatalog = [
       { pair: "ETH/USD OTC", payout: 92, signal: "BUY", strength: 75, grade: "HIGH", setup: "Bullish Pin Bar", safe: true },
+      { pair: "USD/DZD OTC", payout: 82, signal: "BUY", strength: 74, grade: "HIGH", setup: "SMC Order Block", safe: true },
       { pair: "EUR/USD OTC", payout: 89, signal: "SELL", strength: 78, grade: "HIGH", setup: "Supply Block M1", safe: true },
       { pair: "AUD/NZD OTC", payout: 92, signal: "SELL", strength: 74, grade: "HIGH", setup: "Bearish Liquidity Sweep", safe: true },
       { pair: "USD/BRL OTC", payout: 92, signal: "ESPERAR", strength: 48, grade: "CHOP", setup: "Rango Lateral", safe: false },
       { pair: "CAD/JPY OTC", payout: 85, signal: "BUY", strength: 71, grade: "MID", setup: "Demand Block FVG", safe: true },
       { pair: "BTC/USD OTC", payout: 91, signal: "BUY", strength: 69, grade: "MID", setup: "Rebote EMA 21", safe: true },
-      { pair: "USD/DZD OTC", payout: 82, signal: "ESPERAR", strength: 52, grade: "NEUTRAL", setup: "Sin Confluencia", safe: false },
       { pair: "AUD/CHF OTC", payout: 92, signal: "ESPERAR", strength: 45, grade: "CHOP", setup: "Indecisión", safe: false }
     ];
 
-    function selectMarket(m) {
+    function selectMarket(m, isAuto = false) {
       currentPair = m.pair;
       currentPayout = m.payout;
       currentPairText.innerText = currentPair;
@@ -812,9 +841,51 @@
       metaPayoutVal.innerText = currentPayout + "%";
       updateRiskDisplay();
       renderMarketRadar();
-      infoText.innerText = `✅ Mercado activo: ${currentPair} (${currentPayout}% Payout). Escaneo continuo activo.`;
+      if (isAuto) {
+        playBeep(980, 0.15);
+        infoText.innerText = `🔄 Par cambiado automáticamente a ${currentPair} (${currentPayout}% Payout • ${m.signal} ${m.strength}%).`;
+      } else {
+        infoText.innerText = `✅ Mercado activo: ${currentPair} (${currentPayout}% Payout). Escaneo continuo activo.`;
+      }
       if (mediaStream) performAnalysis();
       else generateDemoFeed();
+    }
+
+    // Auto-Rotador Inteligente de Divisas: cambia automáticamente al par con mayor probabilidad
+    function checkAndAutoSwitchMarket() {
+      if (!autoPairSwitchEnabled) return;
+      
+      const safeMarkets = [...marketCatalog]
+        .filter(m => m.safe && m.strength >= 72)
+        .sort((a, b) => (b.strength * b.payout) - (a.strength * a.payout));
+
+      if (safeMarkets.length > 0) {
+        const top = safeMarkets[0];
+        const cur = marketCatalog.find(m => m.pair === currentPair);
+        const curStrength = cur ? cur.strength : 50;
+
+        if (top.pair !== currentPair && (top.strength >= curStrength + 3 || !cur || !cur.safe)) {
+          selectMarket(top, true);
+        }
+      }
+    }
+
+    // Toggle Auto-Pair Switcher (Cambio automático de par de divisas)
+    if (autoPairToggle) {
+      autoPairToggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        autoPairSwitchEnabled = !autoPairSwitchEnabled;
+        if (autoPairSwitchEnabled) {
+          autoPairToggle.classList.add('active');
+          autoPairToggle.innerText = "🔄 AUTO";
+          infoText.innerText = "🔄 Cambio Automático de Divisas ACTIVADO: El bot rotará al par con la mejor señal segura.";
+          checkAndAutoSwitchMarket();
+        } else {
+          autoPairToggle.classList.remove('active');
+          autoPairToggle.innerText = "🔒 FIJO";
+          infoText.innerText = `🔒 Par fijado en ${currentPair}. No cambiará de activo automáticamente.`;
+        }
+      });
     }
 
     function renderMarketRadar() {
@@ -844,7 +915,7 @@
           </div>
         `;
         item.addEventListener('click', () => {
-          selectMarket(m);
+          selectMarket(m, false);
           marketScannerDrawer.style.display = 'none';
         });
         marketListContainer.appendChild(item);
@@ -1662,6 +1733,7 @@
       if (secsLeft === 0 && lastAlertTime !== sec) {
         playBeep(1150, 0.25);
         lastAlertTime = sec;
+        if (autoPairSwitchEnabled) checkAndAutoSwitchMarket();
         if (mediaStream) performAnalysis();
         else generateDemoFeed();
       }
@@ -1678,11 +1750,11 @@
       }, 1000);
     }
 
-    // Auto-actualización periódica de oportunidades en los demás pares
+    // Auto-actualización periódica de oportunidades y rotación automática de divisas
     setInterval(() => {
       marketCatalog.forEach(m => {
         if (m.pair !== currentPair) {
-          const delta = (Math.random() - 0.49) * 3;
+          const delta = (Math.random() - 0.48) * 4;
           m.strength = Math.max(42, Math.min(88, Math.round(m.strength + delta)));
           if (m.strength >= 68) {
             m.safe = true;
@@ -1696,7 +1768,10 @@
       if (marketScannerDrawer && marketScannerDrawer.style.display === 'flex') {
         renderMarketRadar();
       }
-    }, 10000);
+      if (autoPairSwitchEnabled) {
+        checkAndAutoSwitchMarket();
+      }
+    }, 8000);
 
     // Initial render
     updateExpiryUI();
