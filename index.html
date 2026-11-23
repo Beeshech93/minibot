@@ -112,6 +112,25 @@
       align-items: center;
       gap: 6px;
     }
+    .b-pip-pill {
+      background: rgba(0, 245, 196, 0.15);
+      border: 1px solid rgba(0, 245, 196, 0.45);
+      color: var(--mint);
+      border-radius: 8px;
+      padding: 3px 8px;
+      font-size: 10px;
+      font-weight: 800;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      transition: all 0.2s ease;
+    }
+    .b-pip-pill:hover {
+      background: var(--mint);
+      color: #041918;
+      box-shadow: 0 0 10px var(--mint-glow);
+    }
     .b-lang-pill {
       background: var(--pill-bg);
       border: 1px solid var(--pill-border);
@@ -470,8 +489,9 @@
         <span class="b-live-badge"><span class="b-dot"></span> LIVE</span>
       </div>
       <div class="b-top-actions">
+        <button class="b-pip-pill" id="pipBtn" title="Abrir en ventana mini flotante SIEMPRE encima del navegador">📌 Flotar Encima</button>
         <button class="b-lang-pill" id="langBtn">EN ▾</button>
-        <button class="b-icon-btn" id="expandBtn" title="Pantalla Completa">⛶</button>
+        <button class="b-icon-btn" id="expandBtn" title="Ventana Mini Flotante">⛶</button>
       </div>
     </div>
 
@@ -620,6 +640,8 @@
     const riskStakeVal = document.getElementById('riskStakeVal');
     const riskCalcSummary = document.getElementById('riskCalcSummary');
     const infoText = document.getElementById('infoText');
+    const pipBtn = document.getElementById('pipBtn');
+    const expandBtn = document.getElementById('expandBtn');
 
     const video = document.getElementById('screenVideo');
     const canvas = document.getElementById('analysisCanvas');
@@ -706,6 +728,83 @@
         infoText.innerText = "Selecciona la ventana de Pocket Option para activar el análisis.";
         return false;
       }
+    }
+
+    // =============================================================
+    // VENTANA MINI FLOTANTE ENCIMA DEL NAVEGADOR (DOCUMENT PIP & POPUP)
+    // =============================================================
+    async function toggleMiniFloatingWindow() {
+      // 1. Intentar Document Picture-in-Picture API (Chrome 116+: Flota SIEMPRE ENCIMA de todo)
+      if ('documentPictureInPicture' in window) {
+        if (window.documentPictureInPicture.window) {
+          window.documentPictureInPicture.window.close();
+          return;
+        }
+        try {
+          const pipWindow = await window.documentPictureInPicture.requestWindow({
+            width: 360,
+            height: 650
+          });
+
+          // Copiar estilos CSS al documento Picture-in-Picture
+          [...document.styleSheets].forEach(styleSheet => {
+            try {
+              const cssRules = [...styleSheet.cssRules].map(rule => rule.cssText).join('');
+              const style = document.createElement('style');
+              style.textContent = cssRules;
+              pipWindow.document.head.appendChild(style);
+            } catch (e) {
+              const link = document.createElement('link');
+              link.rel = 'stylesheet';
+              link.type = styleSheet.type;
+              link.media = styleSheet.media;
+              link.href = styleSheet.href;
+              pipWindow.document.head.appendChild(link);
+            }
+          });
+
+          // Mover la tarjeta Basilisk al body de la ventana flotante siempre visible
+          const origParent = basiliskCard.parentNode;
+          pipWindow.document.body.style.margin = '0';
+          pipWindow.document.body.style.background = '#070d10';
+          pipWindow.document.body.style.display = 'flex';
+          pipWindow.document.body.style.justifyContent = 'center';
+          pipWindow.document.body.style.alignItems = 'center';
+          pipWindow.document.body.style.minHeight = '100vh';
+          pipWindow.document.body.style.padding = '8px';
+          pipWindow.document.body.appendChild(basiliskCard);
+
+          if (pipBtn) pipBtn.innerText = "✕ Salir Mini";
+          infoText.innerText = "✨ Modo Mini Flotante activo. La ventana permanece SIEMPRE ENCIMA de Pocket Option.";
+
+          pipWindow.addEventListener('pagehide', () => {
+            origParent.appendChild(basiliskCard);
+            if (pipBtn) pipBtn.innerText = "📌 Flotar Encima";
+            infoText.innerText = "Modo Mini cerrado. Ventana restaurada.";
+          });
+          return;
+        } catch (err) {
+          console.warn("Document PiP no disponible o denegado, abriendo ventana compacta popup:", err);
+        }
+      }
+
+      // 2. Alternativa: Popup Flotante de 360x650 px
+      const popup = window.open(
+        window.location.href,
+        'BasiliskMiniWindow',
+        'width=360,height=650,left=80,top=80,menubar=no,toolbar=no,location=no,status=no,resizable=yes'
+      );
+      if (popup) {
+        infoText.innerText = "Ventana Mini Bot abierta. Colócala encima de Pocket Option.";
+      }
+    }
+
+    if (pipBtn) pipBtn.addEventListener('click', toggleMiniFloatingWindow);
+    if (expandBtn) expandBtn.addEventListener('click', toggleMiniFloatingWindow);
+
+    if (window.name === 'BasiliskMiniWindow' || (window.opener && window.innerWidth <= 420)) {
+      document.body.style.padding = '6px';
+      if (pipBtn) pipBtn.style.display = 'none';
     }
 
     connectBtn.addEventListener('click', connectScreen);
