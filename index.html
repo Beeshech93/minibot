@@ -261,6 +261,31 @@
     .b-signal-strength.sell {
       color: var(--red);
     }
+    .b-lock-pill {
+      font-size: 9px;
+      font-weight: 800;
+      color: #38bdf8;
+      background: rgba(14, 165, 233, 0.12);
+      border: 1px solid rgba(14, 165, 233, 0.35);
+      border-radius: 6px;
+      padding: 1px 7px;
+      display: inline-block;
+      width: fit-content;
+      letter-spacing: 0.2px;
+      transition: all 0.2s ease;
+    }
+    .b-lock-pill.confirming {
+      color: #facc15;
+      background: rgba(234, 179, 8, 0.15);
+      border-color: rgba(234, 179, 8, 0.45);
+      animation: alert-pulse 0.6s infinite alternate;
+    }
+    .b-lock-pill.entry {
+      color: #00f5c4;
+      background: rgba(0, 245, 196, 0.2);
+      border-color: #00f5c4;
+      box-shadow: 0 0 8px var(--mint-glow);
+    }
 
     /* Timeframe Selector Pills */
     .b-timeframe-row {
@@ -627,7 +652,10 @@
       </div>
       <div class="b-signal-main">
         <span class="b-signal-dir" id="signalDirText">BUY</span>
-        <span class="b-signal-strength" id="signalStrengthText">↗ 75/100 strength • HIGH</span>
+        <div style="display:flex; flex-direction:column; gap:2px;">
+          <span class="b-signal-strength" id="signalStrengthText">↗ 75/100 strength • HIGH</span>
+          <span class="b-lock-pill" id="signalLockPill">🔒 Señal Fija (Primeros 20s)</span>
+        </div>
       </div>
     </div>
 
@@ -773,6 +801,28 @@
     const marketListContainer = document.getElementById('marketListContainer');
     const bestMarketBadge = document.getElementById('bestMarketBadge');
     const colPair = document.getElementById('colPair');
+    const signalLockPill = document.getElementById('signalLockPill');
+
+    // Anti-Repaint & Bloqueo de Señal (No cambia durante los primeros segundos; solo en los últimos 10s)
+    let currentSignalRoundId = null;
+    let lockedSignal = null;
+    let currentSecsLeft = 30;
+
+    function updateLockPillUI(secsLeft, isLast10s) {
+      if (!signalLockPill) return;
+      if (isLast10s) {
+        if (secsLeft <= 5 && secsLeft >= 1) {
+          signalLockPill.className = "b-lock-pill entry";
+          signalLockPill.innerText = `🎯 ENTRAR EN ${secsLeft}s`;
+        } else {
+          signalLockPill.className = "b-lock-pill confirming";
+          signalLockPill.innerText = `⚡ Confirmación Final (${secsLeft}s)`;
+        }
+      } else {
+        signalLockPill.className = "b-lock-pill";
+        signalLockPill.innerText = `🔒 Señal Fija (${secsLeft}s)`;
+      }
+    }
 
     const scanBtn = document.getElementById('scanBtn');
     const connectBtn = document.getElementById('connectBtn');
@@ -854,6 +904,8 @@
     // Auto-Rotador Inteligente de Divisas: cambia automáticamente al par con mayor probabilidad
     function checkAndAutoSwitchMarket() {
       if (!autoPairSwitchEnabled) return;
+      // REGLA ESTRICTA: Durante los primeros segundos de la vela el par está protegido y NO cambia; solo cambia en los últimos 10s
+      if (currentSecsLeft > 10) return;
       
       const safeMarkets = [...marketCatalog]
         .filter(m => m.safe && m.strength >= 72)
@@ -1476,8 +1528,39 @@
       }
 
       drawBasiliskRadar(candles);
-      const evalRes = evaluateMultiAgentSystem(candles, selectedTfSec);
-      if (evalRes) applyBasiliskSignal(evalRes);
+
+      const now = new Date();
+      const sec = now.getSeconds();
+      const tf = selectedTfSec;
+      const currentSecInTf = (now.getMinutes() * 60 + sec) % tf;
+      let secsLeft = tf - currentSecInTf;
+      if (secsLeft === tf) secsLeft = 0;
+      currentSecsLeft = secsLeft;
+      const roundId = Math.floor(now.getTime() / (tf * 1000));
+
+      // REGLA SOLICITADA POR EL USUARIO:
+      // Durante el primer tiempo de la vela la señal NO PUEDE CAMBIAR (fija/bloqueada).
+      // Solo cambiará o se recalculará en los ÚLTIMOS 10 SEGUNDOS.
+      if (currentSignalRoundId !== roundId || !lockedSignal) {
+        currentSignalRoundId = roundId;
+        const evalRes = evaluateMultiAgentSystem(candles, selectedTfSec);
+        if (evalRes) {
+          lockedSignal = evalRes;
+          applyBasiliskSignal(lockedSignal, false, secsLeft);
+        }
+      } else {
+        if (secsLeft > 10) {
+          // Primeros segundos: Señal completamente fija
+          updateLockPillUI(secsLeft, false);
+        } else {
+          // Últimos 10 segundos: Recalcular y confirmar/ajustar la señal antes del cierre
+          const evalRes = evaluateMultiAgentSystem(candles, selectedTfSec);
+          if (evalRes) {
+            lockedSignal = evalRes;
+            applyBasiliskSignal(lockedSignal, true, secsLeft);
+          }
+        }
+      }
     }
 
     // Canvas Radar Renderer with Price scale and Setup Crosshair
@@ -1617,7 +1700,7 @@
 
     // Apply Basilisk Signal UI (Filtro Estricto de Señal Segura)
     let lastSignal = "";
-    function applyBasiliskSignal(res) {
+    function applyBasiliskSignal(res, isLast10s = false, secsLeft = currentSecsLeft) {
       if (!res) return;
 
       if (res.direction === "BUY") {
@@ -1652,11 +1735,20 @@
 
       setupTagName.innerText = res.setupTitle;
       setupTagSub.innerText = res.setupStrength;
+      updateLockPillUI(secsLeft, isLast10s);
 
-      if (res.isSafe) {
-        infoText.innerText = `🎯 SEÑAL SEGURA (${res.timeLabel}): ${res.direction} con ${res.confidence}% de confluencia. Patrón: ${res.setupTitle} (RSI 20: ${res.rsi}).`;
+      if (isLast10s) {
+        if (res.isSafe) {
+          infoText.innerText = `⚡ ÚLTIMOS ${secsLeft}s (CONFIRMADO): ${res.direction} con ${res.confidence}% de confluencia (${res.setupTitle}).`;
+        } else {
+          infoText.innerText = `🛡️ ÚLTIMOS ${secsLeft}s: Sin confluencia A+ (${res.confidence}%). Se recomienda ESPERAR en esta vela.`;
+        }
       } else {
-        infoText.innerText = `🛡️ Protección de Saldo activa: Sin confluencia suficiente para ${res.timeLabel} (${res.confidence}%). Esperando confirmación A+.`;
+        if (res.isSafe) {
+          infoText.innerText = `🔒 Señal Fija (${res.timeLabel}): ${res.direction} ${res.confidence}% (${res.setupTitle}). Fija hasta los últimos 10s.`;
+        } else {
+          infoText.innerText = `🔒 Señal Fija: ESPERAR (${res.confidence}%). Formando vela... recálculo final en los últimos 10s.`;
+        }
       }
     }
 
@@ -1698,8 +1790,34 @@
       }
 
       drawBasiliskRadar(mockCandles);
-      const evalRes = evaluateMultiAgentSystem(mockCandles, selectedTfSec);
-      if (evalRes) applyBasiliskSignal(evalRes);
+
+      const now = new Date();
+      const sec = now.getSeconds();
+      const tf = selectedTfSec;
+      const currentSecInTf = (now.getMinutes() * 60 + sec) % tf;
+      let secsLeft = tf - currentSecInTf;
+      if (secsLeft === tf) secsLeft = 0;
+      currentSecsLeft = secsLeft;
+      const roundId = Math.floor(now.getTime() / (tf * 1000));
+
+      if (currentSignalRoundId !== roundId || !lockedSignal) {
+        currentSignalRoundId = roundId;
+        const evalRes = evaluateMultiAgentSystem(mockCandles, selectedTfSec);
+        if (evalRes) {
+          lockedSignal = evalRes;
+          applyBasiliskSignal(lockedSignal, false, secsLeft);
+        }
+      } else {
+        if (secsLeft > 10) {
+          updateLockPillUI(secsLeft, false);
+        } else {
+          const evalRes = evaluateMultiAgentSystem(mockCandles, selectedTfSec);
+          if (evalRes) {
+            lockedSignal = evalRes;
+            applyBasiliskSignal(lockedSignal, true, secsLeft);
+          }
+        }
+      }
     }
 
     // Synchronized Clock & Candle Counter
@@ -1714,10 +1832,19 @@
       const currentSecInTf = (now.getMinutes() * 60 + sec) % tf;
       let secsLeft = tf - currentSecInTf;
       if (secsLeft === tf) secsLeft = 0;
+      currentSecsLeft = secsLeft;
 
       const m = Math.floor(secsLeft / 60);
       const s = secsLeft % 60;
       metaExpiryVal.innerText = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+
+      // Actualizar estado del indicador de señal fija / recálculo
+      updateLockPillUI(secsLeft, secsLeft <= 10);
+
+      // Si entramos en los últimos 10 segundos, permitir rotación de par automática
+      if (secsLeft <= 10 && autoPairSwitchEnabled) {
+        checkAndAutoSwitchMarket();
+      }
 
       // Anticipated 5-second alert before chosen timeframe expires
       if (secsLeft >= 1 && secsLeft <= 5) {
@@ -1733,6 +1860,8 @@
       if (secsLeft === 0 && lastAlertTime !== sec) {
         playBeep(1150, 0.25);
         lastAlertTime = sec;
+        currentSignalRoundId = null; // Vela nueva: permite fijar nueva señal inicial
+        lockedSignal = null;
         if (autoPairSwitchEnabled) checkAndAutoSwitchMarket();
         if (mediaStream) performAnalysis();
         else generateDemoFeed();
