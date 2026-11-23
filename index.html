@@ -889,13 +889,15 @@
       currentPairText.innerText = currentPair;
       metaPairVal.innerText = currentPair;
       metaPayoutVal.innerText = currentPayout + "%";
+      currentSignalRoundId = null; // Reiniciar ronda para recalcular la señal del nuevo par inmediatamente
+      lockedSignal = null;
       updateRiskDisplay();
       renderMarketRadar();
       if (isAuto) {
         playBeep(980, 0.15);
         infoText.innerText = `🔄 Par cambiado automáticamente a ${currentPair} (${currentPayout}% Payout • ${m.signal} ${m.strength}%).`;
       } else {
-        infoText.innerText = `✅ Mercado activo: ${currentPair} (${currentPayout}% Payout). Escaneo continuo activo.`;
+        infoText.innerText = `✅ Mercado activo: ${currentPair} (${currentPayout}% Payout • Señal ${m.signal}). Escaneo continuo activo.`;
       }
       if (mediaStream) performAnalysis();
       else generateDemoFeed();
@@ -1302,18 +1304,21 @@
       let zCall = 0.0, zPut = 0.0;
 
       // PONDERACIÓN SEGÚN EL TIEMPO ESCOGIDO:
+      const prevHammer = prev && (prev.lowerWick / Math.max(1, prev.rangeSize) >= 0.40) && c.color === 1;
+      const prevStar = prev && (prev.upperWick / Math.max(1, prev.rangeSize) >= 0.40) && c.color === -1;
+
       if (tfSec <= 30) {
         // En 30 segundos: las mechas de rechazo elástico y el micro-rebote mandan
-        if (isHammer) zCall += 2.8;
-        if (isStar) zPut += 2.8;
-        if (c.color === 1 && bodyRatio >= 0.65) zCall += 1.4;
-        if (c.color === -1 && bodyRatio >= 0.65) zPut += 1.4;
+        if (isHammer || prevHammer) zCall += 3.0;
+        if (isStar || prevStar) zPut += 3.0;
+        if (c.color === 1 && bodyRatio >= 0.60) zCall += 1.8;
+        if (c.color === -1 && bodyRatio >= 0.60) zPut += 1.8;
       } else if (tfSec <= 60) {
         // En 1 minuto: confluencia de vela completa con medias EMA
-        if (isHammer && ema9 >= ema21) zCall += 2.4;
-        if (isStar && ema9 <= ema21) zPut += 2.4;
-        if (consecGreen >= 2 && c.color === 1 && ema9 > ema21) zCall += 2.0;
-        if (consecRed >= 2 && c.color === -1 && ema9 < ema21) zPut += 2.0;
+        if ((isHammer || prevHammer) && ema9 >= ema21) zCall += 2.6;
+        if ((isStar || prevStar) && ema9 <= ema21) zPut += 2.6;
+        if (consecGreen >= 2 && c.color === 1 && ema9 > ema21) zCall += 2.4;
+        if (consecRed >= 2 && c.color === -1 && ema9 < ema21) zPut += 2.4;
       } else if (tfSec <= 180) {
         // En 2-3 minutos: tendencia pura continua sobre EMA
         if (ema9 > ema21 && c.close >= ema9) zCall += 2.4;
@@ -1328,16 +1333,16 @@
       if (smc.sweepVote === "CALL") zCall += 2.5;
       else if (smc.sweepVote === "PUT") zPut += 2.5;
 
-      if (smc.obVote === "CALL") zCall += 1.8;
-      else if (smc.obVote === "PUT") zPut += 1.8;
+      if (smc.obVote === "CALL") zCall += 2.0;
+      else if (smc.obVote === "PUT") zPut += 2.0;
 
       // Dinámica RSI (20)
-      if (rsi > 52 && rsi < 70) zCall += 1.2;
-      else if (rsi < 48 && rsi > 30) zPut += 1.2;
+      if (rsi > 52 && rsi < 75) zCall += 1.4;
+      else if (rsi < 48 && rsi > 25) zPut += 1.4;
 
-      // Filtros de protección de capital (Anti-trampas broker)
-      if (rsi >= 74) zCall -= 3.2; // Peligro comprar en techo
-      if (rsi <= 26) zPut -= 3.2; // Peligro vender en suelo
+      // Filtros de protección de capital (solo en agotamiento extremo real)
+      if (rsi >= 84) zCall -= 3.0; // Solo en sobrecompra extrema
+      if (rsi <= 16) zPut -= 3.0; // Solo en sobreventa extrema
 
       // Probabilidad Bayesiana directa
       const deltaZ = zCall - zPut;
@@ -1355,7 +1360,7 @@
       let isSafe = false;
 
       // Solo si la probabilidad es >= 68% y no hay conflictos severos se emite señal
-      if (probCall >= 68.0 && !isStar && rsi <= 72) {
+      if (probCall >= 68.0 && !isStar && rsi <= 82 && c.color !== -1) {
         if ((tfSec >= 300) && (!m5Bullish)) {
           direction = "ESPERAR";
           confidence = Math.round(probCall);
@@ -1367,13 +1372,13 @@
           confidence = Math.max(70, Math.min(97, Math.round(probCall)));
           grade = confidence >= 82 ? "VERY HIGH" : "HIGH";
           setupStrength = `${timeLabel} • ${grade}`;
-          if (isHammer) setupTitle = "Bullish Pin Bar Rejection";
+          if (isHammer || prevHammer) setupTitle = "Bullish Pin Bar Rejection";
           else if (smc.sweepVote === "CALL") setupTitle = "Smart Money Bull Sweep";
           else if (smc.obVote === "CALL") setupTitle = "Bullish Order Block";
-          else if (rsi <= 32) setupTitle = "Oversold RSI(20) Bounce";
+          else if (rsi <= 35 && c.color === 1) setupTitle = "Oversold RSI(20) Bounce";
           else setupTitle = "Bullish Momentum Trend";
         }
-      } else if (probPut >= 68.0 && !isHammer && rsi >= 28) {
+      } else if (probPut >= 68.0 && !isHammer && rsi >= 18 && c.color !== 1) {
         if ((tfSec >= 300) && (!m5Bearish)) {
           direction = "ESPERAR";
           confidence = Math.round(probPut);
@@ -1385,10 +1390,10 @@
           confidence = Math.max(70, Math.min(97, Math.round(probPut)));
           grade = confidence >= 82 ? "VERY HIGH" : "HIGH";
           setupStrength = `${timeLabel} • ${grade}`;
-          if (isStar) setupTitle = "Bearish Shooting Star";
+          if (isStar || prevStar) setupTitle = "Bearish Shooting Star";
           else if (smc.sweepVote === "PUT") setupTitle = "Smart Money Bear Sweep";
           else if (smc.obVote === "PUT") setupTitle = "Bearish Supply Block";
-          else if (rsi >= 68) setupTitle = "Overbought RSI(20) Drop";
+          else if (rsi >= 65 && c.color === -1) setupTitle = "Overbought RSI(20) Drop";
           else setupTitle = "Bearish Momentum Trend";
         }
       } else {
@@ -1752,24 +1757,84 @@
       }
     }
 
-    // Demo Feeder (when camera isn't connected yet so user immediately sees live Basilisk UI)
+    // Demo Feeder dinámico (Genera tanto BUY, SELL como ESPERAR de forma realista según el mercado)
     let demoCount = 0;
     function generateDemoFeed() {
       demoCount++;
       const mockCandles = [];
       const total = 18;
-      let cur = 100;
+
+      // 1. Determinar el sesgo de mercado: respetar el par seleccionado o alternar ciclos naturalmente
+      const activeM = marketCatalog.find(m => m.pair === currentPair);
+      let mode = "BUY";
+      if (activeM && activeM.signal) {
+        mode = activeM.signal;
+      } else {
+        const cycle = demoCount % 3;
+        mode = cycle === 1 ? "BUY" : (cycle === 2 ? "SELL" : "ESPERAR");
+      }
+
+      let cur = mode === "SELL" ? 180 : 100;
       for (let i = 0; i < total; i++) {
-        const dir = (i === 15 || i === 17) ? 1 : (i % 3 === 0 ? -1 : 1);
-        const bodyH = 8 + (i % 5) * 2;
-        const uWick = 3 + (i % 4) * 3;
-        const lWick = (i === total - 2) ? 16 : 3; // Pin Bar on candle 16
+        let dir = 1;
+        let bodyH = 8 + (i % 4) * 2;
+        let uWick = 3;
+        let lWick = 3;
+
+        if (mode === "SELL") {
+          // Estructura bajista real: máximos y mínimos descendentes
+          dir = (i === 15 || i === 17) ? -1 : (i % 3 === 0 ? 1 : -1);
+          if (i === total - 2) {
+            // Vela 16: Bearish Shooting Star (Estrella Fugaz bajista con mecha superior de rechazo)
+            uWick = 18;
+            lWick = 2;
+            bodyH = 6;
+            dir = -1;
+          } else if (i === total - 1) {
+            // Vela 17: Vela roja de impulso y ruptura bajista
+            dir = -1;
+            bodyH = 10;
+            uWick = 2;
+            lWick = 2;
+          }
+        } else if (mode === "ESPERAR") {
+          // Estructura de rango / indecisión lateral
+          dir = (i % 2 === 0) ? 1 : -1;
+          bodyH = 3 + (i % 3);
+          uWick = 4;
+          lWick = 4;
+        } else {
+          // Estructura alcista (BUY)
+          dir = (i === 15 || i === 17) ? 1 : (i % 3 === 0 ? -1 : 1);
+          if (i === total - 2) {
+            // Vela 16: Bullish Pin Bar / Hammer (Rechazo con mecha inferior de compra)
+            lWick = 18;
+            uWick = 2;
+            bodyH = 6;
+            dir = 1;
+          } else if (i === total - 1) {
+            // Vela 17: Vela verde de confirmación alcista
+            dir = 1;
+            bodyH = 10;
+            uWick = 2;
+            lWick = 2;
+          }
+        }
+
         const cX = i * 20;
+        const trendStep = mode === "SELL" ? -2.8 : (mode === "BUY" ? 2.8 : 0.1);
+        cur += trendStep + (dir * bodyH * 0.2);
+
+        // Coordenadas en canvas visual
+        const bTop = mode === "SELL" ? (45 + i * 4.2) : (mode === "BUY" ? (120 - i * 4.2) : 80);
+        const bBot = bTop + bodyH;
+        const wTop = bTop - uWick;
+        const wBot = bBot + lWick;
 
         mockCandles.push({
           x: cX,
-          open: cur,
-          close: cur + dir * bodyH,
+          open: dir > 0 ? cur : cur + bodyH,
+          close: dir > 0 ? cur + bodyH : cur,
           high: cur + bodyH + uWick,
           low: cur - lWick,
           color: dir,
@@ -1779,14 +1844,13 @@
           rangeSize: bodyH + uWick + lWick,
           px: {
             x: cX,
-            bodyTop: 80 - dir * bodyH,
-            bodyBot: 80 + (dir < 0 ? bodyH : 0),
-            wickTop: 80 - dir * bodyH - uWick,
-            wickBot: 80 + (dir < 0 ? bodyH : 0) + lWick,
+            bodyTop: bTop,
+            bodyBot: bBot,
+            wickTop: wTop,
+            wickBot: wBot,
             width: 7
           }
         });
-        cur += dir * (bodyH * 0.4);
       }
 
       drawBasiliskRadar(mockCandles);
