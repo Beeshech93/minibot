@@ -645,31 +645,40 @@ class ConsensusMasterAgent:
         prob_put = round(100.0 - prob_call, 1)
 
         # =============================================================
-        # ANÁLISIS DIRECCIONAL EXACTO: ¿SUBE O BAJA?
+        # FILTRO DE SEGURIDAD ESTRICTO: SOLO SEÑALES SEGURAS (CONFLUENCIA >= 68%)
         # =============================================================
-        if prob_call >= 50.0:
+        rec_time = "30 SEGUNDOS (00:00:30)"
+        rec_sec = 30
+
+        if prob_call >= 68.0:
             signal = "CALL"
-            confidence = max(54, min(98, int(prob_call)))
+            confidence = max(70, min(98, int(prob_call)))
+            grade = "A+" if confidence >= 82 else "A"
             next_candle_dir = "SUBE"
-            next_candle_label = f"🔮 PRÓXIMA VELA (1M): 🟢 SUBE ({confidence}%)"
+            next_candle_label = f"🔮 PRÓXIMA VELA: 🟢 SUBE ({confidence}%)"
             call_detail = p1_detail if p1_vote == "CALL" else (smc["bos"] or "Impulso Alcista")
             setup_name = f"{call_detail} | {p2_status}"
-            reason = f"Proyección Alcista: {call_detail} + Tendencia {p2_status} + M5 ({'Alcista' if m5_bullish else 'Consolidación'}) + RSI {rsi:.1f}"
-        else:
+            reason = f"Señal Segura Alcista: {call_detail} + Tendencia {p2_status} + RSI {rsi:.1f}"
+            explanation = f"🎯 [SEÑAL SEGURA {grade} | ALTA CONFLUENCIA] ({confidence}%): 🟢 SUBIR (CALL) ({rec_time}). {reason}."
+        elif prob_put >= 68.0:
             signal = "PUT"
-            confidence = max(54, min(98, int(prob_put)))
+            confidence = max(70, min(98, int(prob_put)))
+            grade = "A+" if confidence >= 82 else "A"
             next_candle_dir = "BAJA"
-            next_candle_label = f"🔮 PRÓXIMA VELA (1M): 🔴 BAJA ({confidence}%)"
+            next_candle_label = f"🔮 PRÓXIMA VELA: 🔴 BAJA ({confidence}%)"
             put_detail = p1_detail if p1_vote == "PUT" else (smc["bos"] or "Impulso Bajista")
             setup_name = f"{put_detail} | {p2_status}"
-            reason = f"Proyección Bajista: {put_detail} + Tendencia {p2_status} + M5 ({'Bajista' if m5_bearish else 'Consolidación'}) + RSI {rsi:.1f}"
-
-        grade = "A+" if confidence >= 82 else ("A" if confidence >= 68 else ("B+" if confidence >= 58 else "B"))
-
-        if confidence >= 68:
-            explanation = f"🎯 [SEÑAL {grade} | ALTA CONFLUENCIA] ({confidence}%): {'🟢 SUBIR (CALL)' if signal == 'CALL' else '🔴 BAJAR (PUT)'} (30 SEG / 00:00:30). {reason}."
+            reason = f"Señal Segura Bajista: {put_detail} + Tendencia {p2_status} + RSI {rsi:.1f}"
+            explanation = f"🎯 [SEÑAL SEGURA {grade} | ALTA CONFLUENCIA] ({confidence}%): 🔴 BAJAR (PUT) ({rec_time}). {reason}."
         else:
-            explanation = f"⚡ [PROYECCIÓN {grade}] ({confidence}%): Inclinación hacia {'🟢 SUBIR' if signal == 'CALL' else '🔴 BAJAR'}. {reason}."
+            signal = "ESPERAR"
+            confidence = int(max(prob_call, prob_put))
+            grade = "ESPERAR"
+            next_candle_dir = "INDECISIÓN"
+            next_candle_label = f"🔮 PRÓXIMA VELA: ⚖️ ESPERAR SETUP SEGURO ({confidence}%)"
+            setup_name = "Esperando Confluencia A+"
+            reason = f"Mercado sin ventaja matemática suficiente ({confidence}%). Protegiendo capital."
+            explanation = f"🛡️ [PROTECCIÓN DE CAPITAL]: Sin confluencia segura para {rec_time} ({confidence}%). Esperando setup A+."
 
         trend_str = f"{p2_status} (M5: {'🟢' if m5_bullish else '🔴' if m5_bearish else '⚪'})"
 
@@ -678,8 +687,8 @@ class ConsensusMasterAgent:
             "confidence": confidence,
             "grade": grade,
             "setup": setup_name,
-            "recommended_time": "30 SEGUNDOS (00:00:30)",
-            "duration_seconds": 30,
+            "recommended_time": rec_time,
+            "duration_seconds": rec_sec,
             "explanation": explanation,
             "next_candle": {
                 "direction": next_candle_dir,
